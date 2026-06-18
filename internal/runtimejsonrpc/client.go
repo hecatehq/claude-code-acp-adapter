@@ -69,6 +69,10 @@ type envelope struct {
 	Error   *RPCError       `json:"error,omitempty"`
 }
 
+type cancelRequestParams struct {
+	RequestID json.RawMessage `json:"requestId"`
+}
+
 func Connect(ctx context.Context, spec ConnectSpec) (*Client, error) {
 	if spec.Launcher == nil {
 		spec.Launcher = runtimeproc.NewDefaultLauncher()
@@ -110,6 +114,7 @@ func (c *Client) Request(ctx context.Context, method string, params any) (json.R
 		return result.result, result.err
 	case <-ctx.Done():
 		c.abandonPending(id)
+		c.notifyCancelRequest(id)
 		return nil, ctx.Err()
 	case <-c.done:
 		return nil, c.errOrClosed()
@@ -296,6 +301,14 @@ func (c *Client) abandonPending(id int64) {
 		delete(c.pending, id)
 		c.abandoned[id] = struct{}{}
 	}
+}
+
+func (c *Client) notifyCancelRequest(id int64) {
+	_ = c.write(envelope{
+		JSONRPC: "2.0",
+		Method:  "$/cancel_request",
+		Params:  mustRawJSON(cancelRequestParams{RequestID: rawID(id)}),
+	})
 }
 
 func (c *Client) finishWithError(err error) {
