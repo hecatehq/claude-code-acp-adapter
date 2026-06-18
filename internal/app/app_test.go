@@ -7,6 +7,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/hecatehq/acp-adapter-kit/adaptercli"
 )
 
 func TestVersionFlag(t *testing.T) {
@@ -427,7 +429,7 @@ func TestDoctorCommandReportsFailureWithoutUsage(t *testing.T) {
 }
 
 func TestDoctorCommandUsesClaudeDefaults(t *testing.T) {
-	cmd := newRootCommand(nil, &bytes.Buffer{}, &bytes.Buffer{})
+	cmd := adaptercli.NewRootCommand(adapterSpec(nil, &bytes.Buffer{}, &bytes.Buffer{}))
 	doctorCmd, _, err := cmd.Find([]string{"doctor"})
 	if err != nil {
 		t.Fatalf("find doctor command: %v", err)
