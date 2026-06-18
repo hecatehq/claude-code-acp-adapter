@@ -142,11 +142,15 @@ func (s *Server) Serve(input io.Reader, output io.Writer) error {
 		default:
 		}
 	}
-	methods := make(chan request, 128)
+	methods := newMethodQueue()
 	methodsDone := make(chan struct{})
 	go func() {
 		defer close(methodsDone)
-		for req := range methods {
+		for {
+			req, ok := methods.pop()
+			if !ok {
+				return
+			}
 			ctx := &MethodContext{conn: conn}
 			sendHandlerErr(conn.write(s.handle(ctx, req)))
 		}
@@ -191,9 +195,9 @@ func (s *Server) Serve(input io.Reader, output io.Writer) error {
 			Method:  msg.Method,
 			Params:  msg.Params,
 		}
-		methods <- req
+		methods.push(req)
 	}
-	close(methods)
+	methods.close()
 	conn.finishRequests(io.EOF)
 	select {
 	case err := <-handlerErr:
@@ -361,6 +365,52 @@ type clientResponse struct {
 	result json.RawMessage
 	rpcErr *RPCError
 	err    error
+}
+
+type methodQueue struct {
+	mu     sync.Mutex
+	cond   *sync.Cond
+	closed bool
+	items  []request
+}
+
+func newMethodQueue() *methodQueue {
+	q := &methodQueue{}
+	q.cond = sync.NewCond(&q.mu)
+	return q
+}
+
+func (q *methodQueue) push(req request) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if q.closed {
+		return
+	}
+	q.items = append(q.items, req)
+	q.cond.Signal()
+}
+
+func (q *methodQueue) pop() (request, bool) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	for len(q.items) == 0 && !q.closed {
+		q.cond.Wait()
+	}
+	if len(q.items) == 0 {
+		return request{}, false
+	}
+	req := q.items[0]
+	copy(q.items, q.items[1:])
+	q.items[len(q.items)-1] = request{}
+	q.items = q.items[:len(q.items)-1]
+	return req, true
+}
+
+func (q *methodQueue) close() {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.closed = true
+	q.cond.Broadcast()
 }
 
 func (c *connection) readMessage() (message, bool, error) {

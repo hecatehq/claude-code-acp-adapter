@@ -256,6 +256,51 @@ func TestNotificationDispatchesWhileMethodIsRunning(t *testing.T) {
 	}
 }
 
+func TestNotificationDispatchesAfterBurstOfQueuedMethods(t *testing.T) {
+	cancelled := make(chan struct{})
+	server := NewServer(
+		AdapterInfo{Name: "claude-code-acp-adapter"},
+		WithMethod("session/prompt", func(_ *MethodContext, _ json.RawMessage) (any, *RPCError) {
+			select {
+			case <-cancelled:
+				return map[string]any{"stopReason": "cancelled"}, nil
+			case <-time.After(250 * time.Millisecond):
+				return nil, &RPCError{Code: -32000, Message: "cancel was not dispatched"}
+			}
+		}),
+		WithMethod("test/noop", func(_ *MethodContext, _ json.RawMessage) (any, *RPCError) {
+			return map[string]any{"ok": true}, nil
+		}),
+		WithNotification("session/cancel", func(_ json.RawMessage) error {
+			close(cancelled)
+			return nil
+		}),
+	)
+
+	lines := []string{`{"jsonrpc":"2.0","id":"prompt","method":"session/prompt","params":{"sessionId":"s1"}}`}
+	for i := 0; i < 160; i++ {
+		lines = append(lines, `{"jsonrpc":"2.0","id":"noop","method":"test/noop","params":{}}`)
+	}
+	lines = append(lines, `{"jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":"s1"}}`)
+
+	var out bytes.Buffer
+	err := server.Serve(strings.NewReader(strings.Join(lines, "\n")+"\n"), &out)
+	if err != nil {
+		t.Fatalf("Serve returned error: %v", err)
+	}
+	envelopes := decodeServerEnvelopes(t, out.Bytes())
+	if len(envelopes) != 161 {
+		t.Fatalf("got %d envelopes, want prompt response + noop responses\n%s", len(envelopes), out.String())
+	}
+	var result map[string]any
+	if err := json.Unmarshal(envelopes[0].Result, &result); err != nil {
+		t.Fatalf("decode prompt result: %v", err)
+	}
+	if result["stopReason"] != "cancelled" {
+		t.Fatalf("prompt result = %#v, want cancelled", result)
+	}
+}
+
 type serverEnvelope struct {
 	JSONRPC string          `json:"jsonrpc"`
 	ID      json.RawMessage `json:"id,omitempty"`

@@ -18,6 +18,8 @@ runtime bridge.
   client responses and client RPC errors
 - in-flight client notification dispatch while a request handler is running,
   including prompt cancellation through the runtime bridge
+- ordered ACP method execution without blocking notification dispatch behind a
+  burst of queued method requests
 - malformed JSON errors without stopping later requests
 - invalid JSON-RPC version errors
 - notification dispatch without responses
