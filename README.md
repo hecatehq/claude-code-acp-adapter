@@ -47,8 +47,8 @@ Not implemented yet:
 
 ## Development
 
-Shared ACP transport, runtime JSON-RPC, bridge, host, process, and fake-runtime
-test code lives in
+Shared ACP transport, runtime JSON-RPC, bridge, host, process, doctor runner,
+and fake-runtime test code lives in
 [acp-adapter-kit](https://github.com/hecatehq/acp-adapter-kit). Keep this repo
 focused on the Claude Code-specific CLI boundary, doctor defaults, docs, release
 workflow, and vendor behavior.
