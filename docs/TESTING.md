@@ -23,6 +23,8 @@ runtime bridge.
 - hardened process runner behavior: fixed argv, shell rejection, absolute cwd
   enforcement, env allowlists, redaction, output caps, missing-binary errors,
   non-zero exits, and context cancellation
+- long-lived process start behavior: stdin/stdout pipes, bounded stderr capture,
+  process IDs, exit errors, shell rejection, and cancellation
 - `doctor` runtime-boundary probe success, missing-binary, shell rejection,
   failed version-probe, secret redaction, and invalid-workdir behavior
 
@@ -55,7 +57,9 @@ JSON-RPC path, so fake runtime tests exercise the same transport Hecate and
 other ACP hosts will use.
 
 Use `internal/process` for every subprocess boundary. Its tests pin the
-security contract before real Claude Code integration lands.
+security contract before real Claude Code integration lands. Use `Run` for
+bounded one-shot probes and `Start` for long-lived runtime sessions that need
+stdio pipes.
 
 Use `internal/doctor` for local runtime readiness checks. Its tests use the Go
 test binary as a fake Claude Code executable so command probing stays

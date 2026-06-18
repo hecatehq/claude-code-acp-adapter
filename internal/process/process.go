@@ -5,11 +5,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 )
 
 const (
@@ -23,6 +25,14 @@ type Spec struct {
 	Dir         string
 	Env         EnvPolicy
 	StdoutLimit int64
+	StderrLimit int64
+}
+
+type StartSpec struct {
+	Command     string
+	Args        []string
+	Dir         string
+	Env         EnvPolicy
 	StderrLimit int64
 }
 
@@ -62,6 +72,20 @@ type ExitError struct {
 
 func (e *ExitError) Error() string {
 	return fmt.Sprintf("process exited with code %d: %s", e.Code, e.Command)
+}
+
+type Child struct {
+	Command string
+	Args    []string
+	Dir     string
+	Stdin   io.WriteCloser
+	Stdout  io.ReadCloser
+
+	ctx      context.Context
+	cmd      *exec.Cmd
+	stderr   *limitedBuffer
+	waitOnce sync.Once
+	waitErr  error
 }
 
 func Run(ctx context.Context, spec Spec) (Result, error) {
@@ -118,6 +142,118 @@ func Run(ctx context.Context, spec Spec) (Result, error) {
 		return result, &CommandNotFoundError{Command: spec.Command, Err: err}
 	}
 	return result, fmt.Errorf("run process %q: %w", resolved, err)
+}
+
+func Start(ctx context.Context, spec StartSpec) (*Child, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	resolved, err := ResolveCommand(spec.Command)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateArgs(spec.Args); err != nil {
+		return nil, err
+	}
+	dir, err := CleanWorkingDir(spec.Dir)
+	if err != nil {
+		return nil, err
+	}
+	env, err := BuildEnv(os.Environ(), spec.Env)
+	if err != nil {
+		return nil, err
+	}
+
+	cmd := exec.CommandContext(ctx, resolved, spec.Args...)
+	cmd.Dir = dir
+	cmd.Env = env
+
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return nil, fmt.Errorf("open process stdin: %w", err)
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		_ = stdin.Close()
+		return nil, fmt.Errorf("open process stdout: %w", err)
+	}
+	stderr := newLimitedBuffer(limitOrDefault(spec.StderrLimit))
+	cmd.Stderr = stderr
+
+	if err := cmd.Start(); err != nil {
+		_ = stdin.Close()
+		_ = stdout.Close()
+		if os.IsNotExist(err) {
+			return nil, &CommandNotFoundError{Command: spec.Command, Err: err}
+		}
+		return nil, fmt.Errorf("start process %q: %w", resolved, err)
+	}
+
+	return &Child{
+		Command: resolved,
+		Args:    append([]string(nil), spec.Args...),
+		Dir:     dir,
+		Stdin:   stdin,
+		Stdout:  stdout,
+		ctx:     ctx,
+		cmd:     cmd,
+		stderr:  stderr,
+	}, nil
+}
+
+func (c *Child) PID() int {
+	if c == nil || c.cmd == nil || c.cmd.Process == nil {
+		return 0
+	}
+	return c.cmd.Process.Pid
+}
+
+func (c *Child) Kill() error {
+	if c == nil || c.cmd == nil || c.cmd.Process == nil {
+		return nil
+	}
+	if err := c.cmd.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+		return err
+	}
+	return nil
+}
+
+func (c *Child) Wait() error {
+	if c == nil {
+		return nil
+	}
+	c.waitOnce.Do(func() {
+		err := c.cmd.Wait()
+		if c.ctx.Err() != nil {
+			c.waitErr = fmt.Errorf("process cancelled: %w", c.ctx.Err())
+			return
+		}
+		if err == nil {
+			return
+		}
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			c.waitErr = &ExitError{Command: c.Command, Code: exitErr.ExitCode(), Stderr: c.Stderr()}
+			return
+		}
+		c.waitErr = fmt.Errorf("wait for process %q: %w", c.Command, err)
+	})
+	return c.waitErr
+}
+
+func (c *Child) Stderr() []byte {
+	if c == nil || c.stderr == nil {
+		return nil
+	}
+	return c.stderr.Bytes()
+}
+
+func (c *Child) StderrTruncated() bool {
+	if c == nil || c.stderr == nil {
+		return false
+	}
+	return c.stderr.Truncated()
 }
 
 func ResolveCommand(command string) (string, error) {
@@ -302,6 +438,7 @@ func isShellCommand(command string) bool {
 }
 
 type limitedBuffer struct {
+	mu        sync.Mutex
 	buf       bytes.Buffer
 	limit     int64
 	truncated bool
@@ -312,6 +449,9 @@ func newLimitedBuffer(limit int64) *limitedBuffer {
 }
 
 func (b *limitedBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
 	remaining := b.limit - int64(b.buf.Len())
 	if remaining <= 0 {
 		b.truncated = b.truncated || len(p) > 0
@@ -327,9 +467,15 @@ func (b *limitedBuffer) Write(p []byte) (int, error) {
 }
 
 func (b *limitedBuffer) Bytes() []byte {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
 	return append([]byte(nil), b.buf.Bytes()...)
 }
 
 func (b *limitedBuffer) Truncated() bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
 	return b.truncated
 }

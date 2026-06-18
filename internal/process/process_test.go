@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -164,6 +165,110 @@ func TestContextCancellationKillsProcess(t *testing.T) {
 	}
 }
 
+func TestStartUsesFixedArgvEnvAndPipes(t *testing.T) {
+	command, args := helperCommand("stream", "literal;echo", "$HOME")
+	child, err := adapterprocess.Start(context.Background(), adapterprocess.StartSpec{
+		Command: command,
+		Args:    args,
+		Dir:     t.TempDir(),
+		Env: adapterprocess.EnvPolicy{
+			Inherit: []string{"PATH"},
+			Set:     map[string]string{"GO_WANT_PROCESS_HELPER": "1", "VISIBLE": "yes"},
+		},
+		StderrLimit: 1024,
+	})
+	if err != nil {
+		t.Fatalf("Start returned error: %v", err)
+	}
+	if child.PID() == 0 {
+		t.Fatal("PID is 0")
+	}
+	if _, err := io.WriteString(child.Stdin, "stdin-data"); err != nil {
+		t.Fatalf("write stdin: %v", err)
+	}
+	if err := child.Stdin.Close(); err != nil {
+		t.Fatalf("close stdin: %v", err)
+	}
+	stdout, err := io.ReadAll(child.Stdout)
+	if err != nil {
+		t.Fatalf("read stdout: %v", err)
+	}
+	if err := child.Wait(); err != nil {
+		t.Fatalf("Wait returned error: %v; stderr=%s", err, child.Stderr())
+	}
+	out := string(stdout)
+	if !strings.Contains(out, "ARGS=literal;echo,$HOME") {
+		t.Fatalf("stdout = %q, want literal argv", out)
+	}
+	if !strings.Contains(out, "VISIBLE=yes") {
+		t.Fatalf("stdout = %q, want explicit env", out)
+	}
+	if !strings.Contains(out, "STDIN=stdin-data") {
+		t.Fatalf("stdout = %q, want stdin data", out)
+	}
+	if strings.Contains(out, "ANTHROPIC_API_KEY=") {
+		t.Fatalf("stdout = %q, leaked non-allowlisted env", out)
+	}
+}
+
+func TestStartCapturesStderrLimitAndExitError(t *testing.T) {
+	command, args := helperCommand("start-exit")
+	child, err := adapterprocess.Start(context.Background(), adapterprocess.StartSpec{
+		Command:     command,
+		Args:        args,
+		Dir:         t.TempDir(),
+		Env:         adapterprocess.EnvPolicy{Set: map[string]string{"GO_WANT_PROCESS_HELPER": "1"}},
+		StderrLimit: 8,
+	})
+	if err != nil {
+		t.Fatalf("Start returned error: %v", err)
+	}
+	var exitErr *adapterprocess.ExitError
+	if err := child.Wait(); !errors.As(err, &exitErr) {
+		t.Fatalf("Wait error = %T %[1]v, want ExitError", err)
+	}
+	if exitErr.Code != 6 {
+		t.Fatalf("exit code = %d, want 6", exitErr.Code)
+	}
+	if got := len(child.Stderr()); got != 8 {
+		t.Fatalf("stderr len = %d, want 8", got)
+	}
+	if !child.StderrTruncated() {
+		t.Fatal("StderrTruncated = false, want true")
+	}
+}
+
+func TestStartRejectsShellCommands(t *testing.T) {
+	_, err := adapterprocess.Start(context.Background(), adapterprocess.StartSpec{
+		Command: "/bin/sh",
+		Dir:     t.TempDir(),
+	})
+	if err == nil || !strings.Contains(err.Error(), "is a shell") {
+		t.Fatalf("Start error = %v, want shell rejection", err)
+	}
+}
+
+func TestStartContextCancellationKillsProcess(t *testing.T) {
+	command, args := helperCommand("sleep")
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	child, err := adapterprocess.Start(ctx, adapterprocess.StartSpec{
+		Command:     command,
+		Args:        args,
+		Dir:         t.TempDir(),
+		Env:         adapterprocess.EnvPolicy{Set: map[string]string{"GO_WANT_PROCESS_HELPER": "1"}},
+		StderrLimit: 1024,
+	})
+	if err != nil {
+		t.Fatalf("Start returned error: %v", err)
+	}
+	waitErr := child.Wait()
+	if !errors.Is(waitErr, context.DeadlineExceeded) {
+		t.Fatalf("Wait error = %v, want context deadline", waitErr)
+	}
+}
+
 func TestMissingBinaryReturnsTypedError(t *testing.T) {
 	_, err := adapterprocess.Run(context.Background(), adapterprocess.Spec{
 		Command: filepath.Join(t.TempDir(), "missing-binary"),
@@ -214,6 +319,17 @@ func TestProcessHelper(t *testing.T) {
 		os.Exit(7)
 	case "sleep":
 		time.Sleep(5 * time.Second)
+	case "stream":
+		stdin, _ := io.ReadAll(os.Stdin)
+		fmt.Printf("ARGS=%s\n", strings.Join(rest, ","))
+		fmt.Printf("VISIBLE=%s\n", os.Getenv("VISIBLE"))
+		fmt.Printf("STDIN=%s\n", string(stdin))
+		if value := os.Getenv("ANTHROPIC_API_KEY"); value != "" {
+			fmt.Printf("ANTHROPIC_API_KEY=%s\n", value)
+		}
+	case "start-exit":
+		fmt.Fprint(os.Stderr, strings.Repeat("x", 64))
+		os.Exit(6)
 	default:
 		os.Exit(2)
 	}
