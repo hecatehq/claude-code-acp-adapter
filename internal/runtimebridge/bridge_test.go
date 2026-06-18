@@ -176,6 +176,30 @@ func TestPromptForwardsRawParamsToRuntime(t *testing.T) {
 	}
 }
 
+func TestPromptPreservesRawRuntimeResult(t *testing.T) {
+	runtime := newFakeRuntimeClient()
+	runtime.promptResult = json.RawMessage(`{"stopReason":"end_turn","x-result":{"kept":true}}`)
+	client := newBridgeClient(t, runtime)
+
+	envelopes := client.Send(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "prompt-1",
+		"method":  "session/prompt",
+		"params": map[string]any{
+			"sessionId": "sess-bridge",
+			"prompt":    []map[string]string{{"type": "text", "text": "hello"}},
+		},
+	})
+	if len(envelopes) != 1 {
+		t.Fatalf("got %d envelopes, want prompt response", len(envelopes))
+	}
+	var result map[string]json.RawMessage
+	envelopes[0].ResultInto(t, &result)
+	if string(result["x-result"]) != `{"kept":true}` {
+		t.Fatalf("x-result = %s, want preserved object", result["x-result"])
+	}
+}
+
 func TestPromptForwardsDynamicSessionUpdates(t *testing.T) {
 	runtime := newFakeRuntimeClient()
 	runtime.events = make(chan runtimejsonrpc.Event)
@@ -589,6 +613,19 @@ func TestListSessionsProxiesRuntimeResult(t *testing.T) {
 	}
 }
 
+func TestListSessionsPreservesRawRuntimeResult(t *testing.T) {
+	runtime := newFakeRuntimeClient()
+	runtime.listSessionsResult = json.RawMessage(`{"sessions":[],"nextCursor":"next","x-result":true}`)
+	client := newBridgeClient(t, runtime)
+
+	response := client.Request("session/list", map[string]any{"cwd": "/tmp/project"})
+	var result map[string]json.RawMessage
+	response.ResultInto(t, &result)
+	if string(result["x-result"]) != `true` {
+		t.Fatalf("x-result = %s, want true", result["x-result"])
+	}
+}
+
 func TestMCPMessageProxiesRuntimeResult(t *testing.T) {
 	runtime := newFakeRuntimeClient()
 	client := newBridgeClient(t, runtime)
@@ -963,6 +1000,8 @@ type fakeRuntimeClient struct {
 	childRequestReturnsOnCancel   bool
 	blockPromptUntilCancel        bool
 	blockPromptUntilContextCancel bool
+	promptResult                  json.RawMessage
+	listSessionsResult            json.RawMessage
 	cancelled                     chan struct{}
 	newSessionUpdates             []json.RawMessage
 	promptUpdates                 []json.RawMessage
@@ -1006,6 +1045,9 @@ func (f *fakeRuntimeClient) Request(ctx context.Context, method string, params a
 		}
 		return json.RawMessage(`{"sessionId":"sess-bridge","configOptions":[{"id":"model","name":"Model","type":"select","currentValue":"fast","options":[{"value":"fast","name":"Fast"}]}],"modes":{"currentModeId":"ask"}}`), nil
 	case "session/prompt":
+		if len(f.promptResult) != 0 {
+			return append(json.RawMessage(nil), f.promptResult...), nil
+		}
 		if f.blockPromptUntilContextCancel {
 			select {
 			case <-ctx.Done():
@@ -1080,6 +1122,9 @@ func (f *fakeRuntimeClient) Request(ctx context.Context, method string, params a
 		}
 		return json.RawMessage(`{"mode":"default"}`), nil
 	case "session/list":
+		if len(f.listSessionsResult) != 0 {
+			return append(json.RawMessage(nil), f.listSessionsResult...), nil
+		}
 		return json.RawMessage(`{"sessions":[{"sessionId":"sess-bridge","cwd":"/tmp/project","title":"Bridge session"}],"nextCursor":"next"}`), nil
 	case "session/close":
 		for _, params := range f.closeUpdates {
