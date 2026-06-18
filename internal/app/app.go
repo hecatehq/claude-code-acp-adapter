@@ -54,7 +54,7 @@ func newRootCommand(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.
 				if runtimeWorkDir == "" {
 					return fmt.Errorf("--runtime-workdir is required when --runtime-binary is set")
 				}
-				host := newDeferredRuntimeHost(cmd.Context(), runtimehost.Spec{
+				host := runtimehost.NewDeferred(cmd.Context(), runtimehost.Spec{
 					Launch: runtimeproc.LaunchSpec{
 						Binary:  runtimeBinary,
 						Args:    runtimeArgs,
