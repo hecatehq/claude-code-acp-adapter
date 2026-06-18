@@ -665,6 +665,62 @@ func TestSetConfigOptionProxiesRuntimeResult(t *testing.T) {
 	}
 }
 
+func TestSetConfigOptionForwardsRuntimeUpdatesBeforeResponse(t *testing.T) {
+	runtime := newFakeRuntimeClient()
+	runtime.events = make(chan runtimejsonrpc.Event)
+	runtime.configOptionUpdates = []json.RawMessage{
+		json.RawMessage(`{"sessionId":"sess-bridge","update":{"sessionUpdate":"config_option_update","configOptions":[{"id":"model","currentValue":"smart"}]}}`),
+	}
+	client := newBridgeClient(t, runtime)
+
+	responsesCh := make(chan []acptest.Response, 1)
+	go func() {
+		responsesCh <- client.Send(map[string]any{
+			"jsonrpc": "2.0",
+			"id":      "config-1",
+			"method":  "session/set_config_option",
+			"params": map[string]any{
+				"sessionId": "sess-bridge",
+				"configId":  "model",
+				"value":     "smart",
+			},
+		})
+	}()
+
+	var envelopes []acptest.Response
+	select {
+	case envelopes = <-responsesCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for session/set_config_option response; bridge did not drain runtime update")
+	}
+	if len(envelopes) != 2 {
+		t.Fatalf("got %d envelopes, want config update + response", len(envelopes))
+	}
+	var update struct {
+		SessionID string `json:"sessionId"`
+		Update    struct {
+			SessionUpdate string `json:"sessionUpdate"`
+			ConfigOptions []struct {
+				ID           string `json:"id"`
+				CurrentValue string `json:"currentValue"`
+			} `json:"configOptions"`
+		} `json:"update"`
+	}
+	envelopes[0].ParamsInto(t, &update)
+	if update.SessionID != "sess-bridge" ||
+		update.Update.SessionUpdate != "config_option_update" ||
+		len(update.Update.ConfigOptions) != 1 ||
+		update.Update.ConfigOptions[0].ID != "model" ||
+		update.Update.ConfigOptions[0].CurrentValue != "smart" {
+		t.Fatalf("config option update = %#v", update)
+	}
+	var result map[string]any
+	envelopes[1].ResultInto(t, &result)
+	if _, ok := result["configOptions"]; !ok {
+		t.Fatalf("set_config_option result = %#v, want configOptions", result)
+	}
+}
+
 func TestSetModeProxiesRuntimeResult(t *testing.T) {
 	runtime := newFakeRuntimeClient()
 	client := newBridgeClient(t, runtime)
@@ -675,6 +731,56 @@ func TestSetModeProxiesRuntimeResult(t *testing.T) {
 	})
 	var result map[string]any
 	response.ResultInto(t, &result)
+	if _, ok := result["modes"]; !ok {
+		t.Fatalf("set_mode result = %#v, want modes", result)
+	}
+}
+
+func TestSetModeForwardsRuntimeUpdatesBeforeResponse(t *testing.T) {
+	runtime := newFakeRuntimeClient()
+	runtime.events = make(chan runtimejsonrpc.Event)
+	runtime.modeUpdates = []json.RawMessage{
+		json.RawMessage(`{"sessionId":"sess-bridge","update":{"sessionUpdate":"current_mode_update","currentModeId":"code"}}`),
+	}
+	client := newBridgeClient(t, runtime)
+
+	responsesCh := make(chan []acptest.Response, 1)
+	go func() {
+		responsesCh <- client.Send(map[string]any{
+			"jsonrpc": "2.0",
+			"id":      "mode-1",
+			"method":  "session/set_mode",
+			"params": map[string]any{
+				"sessionId": "sess-bridge",
+				"modeId":    "code",
+			},
+		})
+	}()
+
+	var envelopes []acptest.Response
+	select {
+	case envelopes = <-responsesCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for session/set_mode response; bridge did not drain runtime update")
+	}
+	if len(envelopes) != 2 {
+		t.Fatalf("got %d envelopes, want mode update + response", len(envelopes))
+	}
+	var update struct {
+		SessionID string `json:"sessionId"`
+		Update    struct {
+			SessionUpdate string `json:"sessionUpdate"`
+			CurrentModeID string `json:"currentModeId"`
+		} `json:"update"`
+	}
+	envelopes[0].ParamsInto(t, &update)
+	if update.SessionID != "sess-bridge" ||
+		update.Update.SessionUpdate != "current_mode_update" ||
+		update.Update.CurrentModeID != "code" {
+		t.Fatalf("mode update = %#v", update)
+	}
+	var result map[string]any
+	envelopes[1].ResultInto(t, &result)
 	if _, ok := result["modes"]; !ok {
 		t.Fatalf("set_mode result = %#v, want modes", result)
 	}
@@ -786,6 +892,8 @@ type fakeRuntimeClient struct {
 	promptUpdates               []json.RawMessage
 	resumeUpdates               []json.RawMessage
 	closeUpdates                []json.RawMessage
+	configOptionUpdates         []json.RawMessage
+	modeUpdates                 []json.RawMessage
 	responses                   chan runtimeChildResponse
 	lastResponse                *runtimeChildResponse
 }
@@ -897,8 +1005,20 @@ func (f *fakeRuntimeClient) Request(_ctx context.Context, method string, params 
 	case "session/delete":
 		return json.RawMessage(`{}`), nil
 	case "session/set_config_option":
+		for _, params := range f.configOptionUpdates {
+			f.events <- runtimejsonrpc.Event{
+				Method: "session/update",
+				Params: append(json.RawMessage(nil), params...),
+			}
+		}
 		return json.RawMessage(`{"configOptions":[{"id":"model","name":"Model","type":"select","currentValue":"smart","options":[{"value":"smart","name":"Smart"}]}]}`), nil
 	case "session/set_mode":
+		for _, params := range f.modeUpdates {
+			f.events <- runtimejsonrpc.Event{
+				Method: "session/update",
+				Params: append(json.RawMessage(nil), params...),
+			}
+		}
 		return json.RawMessage(`{"modes":{"currentModeId":"code","availableModes":[{"id":"code","name":"Code"}]}}`), nil
 	case "mcp/message":
 		return json.RawMessage(`{"jsonrpc":"2.0","id":1,"result":{"ok":true}}`), nil
