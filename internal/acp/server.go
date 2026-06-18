@@ -7,9 +7,13 @@ import (
 	"fmt"
 	"io"
 	"sync"
+
+	sdk "github.com/coder/acp-go-sdk"
 )
 
 const maxMessageBytes = 1024 * 1024
+
+type RPCError = sdk.RequestError
 
 type AdapterInfo struct {
 	Name         string
@@ -262,7 +266,7 @@ func (s *Server) handle(ctx *MethodContext, req request) response {
 			return resultResponse(req.ID, s.initialize)
 		}
 		return resultResponse(req.ID, initializeResult{
-			ProtocolVersion: 1,
+			ProtocolVersion: sdk.ProtocolVersionNumber,
 			AgentCapabilities: agentCapabilities{
 				PromptCapabilities: promptCapabilities{
 					Image:           s.info.Capabilities.Images,
@@ -335,12 +339,6 @@ type response struct {
 	ID      *json.RawMessage `json:"id"`
 	Result  any              `json:"result,omitempty"`
 	Error   *RPCError        `json:"error,omitempty"`
-}
-
-type RPCError struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
-	Data    any    `json:"data,omitempty"`
 }
 
 func resultResponse(id *json.RawMessage, result any) response {

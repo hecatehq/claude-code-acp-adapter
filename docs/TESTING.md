@@ -86,6 +86,9 @@ runtime bridge.
   startup with forwarded client initialize capabilities, required absolute
   runtime workdir, runtime argv passthrough, and default scaffold behavior when
   no runtime binary is configured
+- Coder ACP SDK compatibility guardrails for the adopted protocol primitives:
+  JSON-RPC error shape, default initialize protocol version, and selected
+  runtime ACP request JSON shapes
 
 ## Not Covered Yet
 
@@ -138,7 +141,8 @@ Claude Code-specific ACP mapping outside this transport client.
 Use `internal/runtimeacp` for ACP protocol lifecycle calls made to a
 subprocess-backed runtime. It should stay protocol-shaped and vendor-neutral;
 Claude Code-specific behavior belongs in the layer that maps Claude Code
-runtime semantics onto ACP.
+runtime semantics onto ACP. When adopting `github.com/coder/acp-go-sdk` types,
+add parity tests for the exact JSON shape before replacing hand-written DTOs.
 
 Use `internal/runtimebridge` to connect ACP server handlers to a
 subprocess-backed runtime client. It owns handler-level param decoding,
