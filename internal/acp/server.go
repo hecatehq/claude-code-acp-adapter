@@ -2,6 +2,7 @@ package acp
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -48,6 +49,14 @@ type NotificationHandler func(params json.RawMessage) error
 
 type MethodContext struct {
 	conn *connection
+	ctx  context.Context
+}
+
+func (c *MethodContext) Context() context.Context {
+	if c == nil || c.ctx == nil {
+		return context.Background()
+	}
+	return c.ctx
 }
 
 func (c *MethodContext) Notify(method string, params any) error {
@@ -78,11 +87,16 @@ func (c *MethodContext) Request(method string, params any) (json.RawMessage, *RP
 		c.conn.removeRequest(id)
 		return nil, nil, err
 	}
-	result := <-resultCh
-	if result.err != nil {
-		return nil, nil, result.err
+	select {
+	case result := <-resultCh:
+		if result.err != nil {
+			return nil, nil, result.err
+		}
+		return append(json.RawMessage(nil), result.result...), result.rpcErr, nil
+	case <-c.Context().Done():
+		c.conn.removeRequest(id)
+		return nil, nil, c.Context().Err()
 	}
-	return append(json.RawMessage(nil), result.result...), result.rpcErr, nil
 }
 
 func WithMethod(method string, handler MethodHandler) Option {
@@ -144,6 +158,8 @@ func (s *Server) Serve(input io.Reader, output io.Writer) error {
 		encoder:   json.NewEncoder(output),
 		pending:   map[string]chan clientResponse{},
 		responses: map[string]clientResponse{},
+		active:    map[string]context.CancelFunc{},
+		cancelled: map[string]struct{}{},
 	}
 	handlerErr := make(chan error, 1)
 	sendHandlerErr := func(err error) {
@@ -164,8 +180,9 @@ func (s *Server) Serve(input io.Reader, output io.Writer) error {
 			if !ok {
 				return
 			}
-			ctx := &MethodContext{conn: conn}
+			ctx, finish := conn.beginInboundRequest(req.ID)
 			sendHandlerErr(conn.write(s.handle(ctx, req)))
+			finish()
 		}
 	}()
 	var concurrent sync.WaitGroup
@@ -173,8 +190,9 @@ func (s *Server) Serve(input io.Reader, output io.Writer) error {
 		concurrent.Add(1)
 		go func() {
 			defer concurrent.Done()
-			ctx := &MethodContext{conn: conn}
+			ctx, finish := conn.beginInboundRequest(req.ID)
 			sendHandlerErr(conn.write(s.handle(ctx, req)))
+			finish()
 		}()
 	}
 
@@ -200,6 +218,10 @@ func (s *Server) Serve(input io.Reader, output io.Writer) error {
 			continue
 		}
 		if msg.Method == "" {
+			continue
+		}
+		if msg.ID == nil && msg.Method == "$/cancel_request" {
+			conn.cancelInboundRequest(msg.Params)
 			continue
 		}
 		if msg.ID == nil {
@@ -413,6 +435,8 @@ type connection struct {
 	nextID    int64
 	pending   map[string]chan clientResponse
 	responses map[string]clientResponse
+	active    map[string]context.CancelFunc
+	cancelled map[string]struct{}
 	closed    bool
 	closeErr  error
 }
@@ -421,6 +445,10 @@ type clientResponse struct {
 	result json.RawMessage
 	rpcErr *RPCError
 	err    error
+}
+
+type cancelRequestParams struct {
+	RequestID json.RawMessage `json:"requestId"`
 }
 
 type methodQueue struct {
@@ -522,6 +550,45 @@ func (c *connection) removeRequest(id json.RawMessage) {
 	c.requestMu.Lock()
 	defer c.requestMu.Unlock()
 	delete(c.pending, string(id))
+}
+
+func (c *connection) beginInboundRequest(id *json.RawMessage) (*MethodContext, func()) {
+	ctx, cancel := context.WithCancel(context.Background())
+	if id == nil {
+		return &MethodContext{conn: c, ctx: ctx}, cancel
+	}
+	key := string(*id)
+	c.requestMu.Lock()
+	if _, ok := c.cancelled[key]; ok {
+		delete(c.cancelled, key)
+		cancel()
+	} else {
+		c.active[key] = cancel
+	}
+	c.requestMu.Unlock()
+	return &MethodContext{conn: c, ctx: ctx}, func() {
+		c.requestMu.Lock()
+		delete(c.active, key)
+		delete(c.cancelled, key)
+		c.requestMu.Unlock()
+		cancel()
+	}
+}
+
+func (c *connection) cancelInboundRequest(params json.RawMessage) {
+	var req cancelRequestParams
+	if err := json.Unmarshal(params, &req); err != nil || len(req.RequestID) == 0 {
+		return
+	}
+	c.requestMu.Lock()
+	cancel := c.active[string(req.RequestID)]
+	if cancel == nil {
+		c.cancelled[string(req.RequestID)] = struct{}{}
+	}
+	c.requestMu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
 }
 
 func (c *connection) deliverResponse(msg message) {
