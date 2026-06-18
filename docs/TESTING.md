@@ -53,6 +53,8 @@ runtime bridge.
   info/capabilities, agent capability parsing, protocol-version mismatch, and
   runtime RPC error propagation
 - session capability preservation in runtime initialize results
+- MCP `acp`, `http`, and `sse` capability preservation in runtime initialize
+  results
 - ACP session lifecycle calls over the runtime JSON-RPC client: `session/new`,
   `session/fork`, `session/prompt`, `session/cancel`, `session/close`, session
   updates, stop reasons, MCP server payloads, and RPC error propagation

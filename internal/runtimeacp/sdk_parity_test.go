@@ -150,6 +150,21 @@ func TestACPMCPServerMatchesCoderSDKJSONShape(t *testing.T) {
 	)
 }
 
+func TestMCPAgentCapabilitiesMatchCoderSDKJSONShape(t *testing.T) {
+	assertSameJSONShape(t,
+		runtimeacp.MCPAgentCapabilities{
+			ACP:  true,
+			HTTP: true,
+			SSE:  true,
+		},
+		sdk.McpCapabilities{
+			Acp:  true,
+			Http: true,
+			Sse:  true,
+		},
+	)
+}
+
 func assertSameJSONShape(t testing.TB, local any, upstream any) {
 	t.Helper()
 	localMap := marshalObject(t, local)
