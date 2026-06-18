@@ -22,6 +22,8 @@ runtime bridge.
   bridge
 - protocol-level `$/cancel_request` cancellation for in-flight method handlers
   waiting on server-to-client requests
+- runtime bridge request context propagation, so protocol cancellation reaches
+  context-aware runtime calls
 - ordered ACP method execution without blocking notification dispatch behind a
   burst of queued method requests
 - malformed JSON errors without stopping later requests
