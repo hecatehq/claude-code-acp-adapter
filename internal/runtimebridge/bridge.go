@@ -43,6 +43,7 @@ func (b *Bridge) Options() []acp.Option {
 		acp.WithMethod("session/close", b.closeSession),
 		acp.WithMethod("session/delete", b.deleteSession),
 		acp.WithNotification("session/cancel", b.cancelNotification),
+		acp.WithNotification("mcp/message", b.mcpMessageNotification),
 	}
 }
 
@@ -166,6 +167,14 @@ func (b *Bridge) mcpMessage(_ *acp.MethodContext, params json.RawMessage) (any, 
 		return nil, mapRuntimeError(err)
 	}
 	return result, nil
+}
+
+func (b *Bridge) mcpMessageNotification(params json.RawMessage) error {
+	var req runtimeacp.MCPMessageParams
+	if err := json.Unmarshal(params, &req); err != nil {
+		return fmt.Errorf("invalid mcp/message params: %w", err)
+	}
+	return runtimeacp.NotifyMCPMessage(context.Background(), b.runtime, req)
 }
 
 func (b *Bridge) cancelMethod(_ *acp.MethodContext, params json.RawMessage) (any, *acp.RPCError) {
