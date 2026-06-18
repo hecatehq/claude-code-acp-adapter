@@ -20,6 +20,8 @@ runtime bridge.
 - in-flight client notification and concurrent cancel-request dispatch while a
   request handler is running, including prompt cancellation through the runtime
   bridge
+- protocol-level `$/cancel_request` cancellation for in-flight method handlers
+  waiting on server-to-client requests
 - ordered ACP method execution without blocking notification dispatch behind a
   burst of queued method requests
 - malformed JSON errors without stopping later requests
