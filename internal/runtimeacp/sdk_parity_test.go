@@ -118,6 +118,23 @@ func TestMCPMessageParamsMatchCoderSDKJSONShape(t *testing.T) {
 	)
 }
 
+func TestACPMCPServerMatchesCoderSDKJSONShape(t *testing.T) {
+	assertSameJSONShape(t,
+		runtimeacp.MCPServer{
+			Type: "acp",
+			ID:   "mcp-acp-1",
+			Name: "Hosted MCP",
+		},
+		sdk.McpServer{
+			Acp: &sdk.McpServerAcpInline{
+				Type: "acp",
+				Id:   sdk.McpServerAcpId("mcp-acp-1"),
+				Name: "Hosted MCP",
+			},
+		},
+	)
+}
+
 func assertSameJSONShape(t testing.TB, local any, upstream any) {
 	t.Helper()
 	localMap := marshalObject(t, local)

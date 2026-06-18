@@ -61,6 +61,8 @@ runtime bridge.
 - ACP session load/resume/fork/list/delete protocol calls, including replay
   updates, raw resume/fork result preservation, listed session metadata, cursor
   parsing, and delete request forwarding
+- ACP-transport MCP server request payloads preserve their opaque `id` and
+  `_meta` data when forwarded to subprocess runtimes
 - unstable MCP-over-ACP `mcp/message` pass-through, including raw inner MCP
   response preservation
 - ACP server-to-runtime bridge behavior: handler param validation, session
