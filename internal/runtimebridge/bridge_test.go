@@ -441,6 +441,58 @@ func TestResumeSessionProxiesRuntimeResult(t *testing.T) {
 	}
 }
 
+func TestResumeSessionForwardsReplayBeforeResponse(t *testing.T) {
+	runtime := newFakeRuntimeClient()
+	runtime.events = make(chan runtimejsonrpc.Event)
+	runtime.resumeUpdates = []json.RawMessage{
+		json.RawMessage(`{"sessionId":"sess-bridge","update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"resumed replay"}}}`),
+	}
+	client := newBridgeClient(t, runtime)
+
+	responsesCh := make(chan []acptest.Response, 1)
+	go func() {
+		responsesCh <- client.Send(map[string]any{
+			"jsonrpc": "2.0",
+			"id":      "resume-1",
+			"method":  "session/resume",
+			"params": map[string]any{
+				"sessionId": "sess-bridge",
+				"cwd":       "/tmp/project",
+			},
+		})
+	}()
+
+	var envelopes []acptest.Response
+	select {
+	case envelopes = <-responsesCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for session/resume response; bridge did not drain runtime update")
+	}
+	if len(envelopes) != 2 {
+		t.Fatalf("got %d envelopes, want replay notification + resume response", len(envelopes))
+	}
+	var update struct {
+		SessionID string `json:"sessionId"`
+		Update    struct {
+			SessionUpdate string `json:"sessionUpdate"`
+			Content       struct {
+				Text string `json:"text"`
+			} `json:"content"`
+		} `json:"update"`
+	}
+	envelopes[0].ParamsInto(t, &update)
+	if update.SessionID != "sess-bridge" ||
+		update.Update.SessionUpdate != "user_message_chunk" ||
+		update.Update.Content.Text != "resumed replay" {
+		t.Fatalf("resume replay update = %#v", update)
+	}
+	var result map[string]any
+	envelopes[1].ResultInto(t, &result)
+	if result["mode"] != "default" {
+		t.Fatalf("resume result = %#v, want mode default", result)
+	}
+}
+
 func TestListSessionsProxiesRuntimeResult(t *testing.T) {
 	runtime := newFakeRuntimeClient()
 	client := newBridgeClient(t, runtime)
@@ -732,6 +784,7 @@ type fakeRuntimeClient struct {
 	cancelled                   chan struct{}
 	newSessionUpdates           []json.RawMessage
 	promptUpdates               []json.RawMessage
+	resumeUpdates               []json.RawMessage
 	closeUpdates                []json.RawMessage
 	responses                   chan runtimeChildResponse
 	lastResponse                *runtimeChildResponse
@@ -824,6 +877,12 @@ func (f *fakeRuntimeClient) Request(_ctx context.Context, method string, params 
 	case "session/fork":
 		return json.RawMessage(`{"sessionId":"forked-bridge","configOptions":[{"id":"model","name":"Model","type":"select","currentValue":"smart","options":[{"value":"smart","name":"Smart"}]}],"modes":{"currentModeId":"code"},"source":"fork"}`), nil
 	case "session/resume":
+		for _, params := range f.resumeUpdates {
+			f.events <- runtimejsonrpc.Event{
+				Method: "session/update",
+				Params: append(json.RawMessage(nil), params...),
+			}
+		}
 		return json.RawMessage(`{"mode":"default"}`), nil
 	case "session/list":
 		return json.RawMessage(`{"sessions":[{"sessionId":"sess-bridge","cwd":"/tmp/project","title":"Bridge session"}],"nextCursor":"next"}`), nil

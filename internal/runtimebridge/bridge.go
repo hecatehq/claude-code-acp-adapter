@@ -99,16 +99,14 @@ func (b *Bridge) loadSession(ctx *acp.MethodContext, params json.RawMessage) (an
 	})
 }
 
-func (b *Bridge) resumeSession(_ *acp.MethodContext, params json.RawMessage) (any, *acp.RPCError) {
+func (b *Bridge) resumeSession(ctx *acp.MethodContext, params json.RawMessage) (any, *acp.RPCError) {
 	var req runtimeacp.ResumeSessionParams
 	if rpcErr := decodeParams(params, &req); rpcErr != nil {
 		return nil, rpcErr
 	}
-	result, err := runtimeacp.ResumeSession(context.Background(), b.runtime, req)
-	if err != nil {
-		return nil, mapRuntimeError(err)
-	}
-	return result, nil
+	return b.callWithEvents(ctx, func() (any, error) {
+		return runtimeacp.ResumeSession(context.Background(), b.runtime, req)
+	})
 }
 
 func (b *Bridge) listSessions(_ *acp.MethodContext, params json.RawMessage) (any, *acp.RPCError) {
