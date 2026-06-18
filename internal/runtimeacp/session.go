@@ -144,6 +144,14 @@ type DeleteSessionParams struct {
 }
 
 func NewSession(ctx context.Context, client JSONRPCClient, params NewSessionParams) (NewSessionResult, error) {
+	return newSession(ctx, client, params)
+}
+
+func NewSessionRaw(ctx context.Context, client JSONRPCClient, params json.RawMessage) (NewSessionResult, error) {
+	return newSession(ctx, client, params)
+}
+
+func newSession(ctx context.Context, client JSONRPCClient, params any) (NewSessionResult, error) {
 	resultData, err := requestRaw(ctx, client, "session/new", params)
 	if err != nil {
 		return NewSessionResult{}, err
@@ -168,6 +176,14 @@ func (r NewSessionResult) MarshalJSON() ([]byte, error) {
 }
 
 func ForkSession(ctx context.Context, client JSONRPCClient, params ForkSessionParams) (ForkSessionResult, error) {
+	return forkSession(ctx, client, params)
+}
+
+func ForkSessionRaw(ctx context.Context, client JSONRPCClient, params json.RawMessage) (ForkSessionResult, error) {
+	return forkSession(ctx, client, params)
+}
+
+func forkSession(ctx context.Context, client JSONRPCClient, params any) (ForkSessionResult, error) {
 	resultData, err := requestRaw(ctx, client, "session/fork", params)
 	if err != nil {
 		return ForkSessionResult{}, err
@@ -192,6 +208,14 @@ func (r ForkSessionResult) MarshalJSON() ([]byte, error) {
 }
 
 func Prompt(ctx context.Context, client JSONRPCClient, params PromptParams) (PromptResult, error) {
+	return prompt(ctx, client, params)
+}
+
+func PromptRaw(ctx context.Context, client JSONRPCClient, params json.RawMessage) (PromptResult, error) {
+	return prompt(ctx, client, params)
+}
+
+func prompt(ctx context.Context, client JSONRPCClient, params any) (PromptResult, error) {
 	var result PromptResult
 	if err := requestInto(ctx, client, "session/prompt", params, &result); err != nil {
 		return PromptResult{}, err
@@ -206,7 +230,15 @@ func LoadSession(ctx context.Context, client JSONRPCClient, params LoadSessionPa
 	return requestRaw(ctx, client, "session/load", params)
 }
 
+func LoadSessionRaw(ctx context.Context, client JSONRPCClient, params json.RawMessage) (json.RawMessage, error) {
+	return requestRaw(ctx, client, "session/load", params)
+}
+
 func ResumeSession(ctx context.Context, client JSONRPCClient, params ResumeSessionParams) (json.RawMessage, error) {
+	return requestRaw(ctx, client, "session/resume", params)
+}
+
+func ResumeSessionRaw(ctx context.Context, client JSONRPCClient, params json.RawMessage) (json.RawMessage, error) {
 	return requestRaw(ctx, client, "session/resume", params)
 }
 
@@ -229,11 +261,27 @@ func Cancel(ctx context.Context, client Notifier, params CancelParams) error {
 }
 
 func CloseSession(ctx context.Context, client JSONRPCClient, params CloseSessionParams) error {
+	return closeSession(ctx, client, params)
+}
+
+func CloseSessionRaw(ctx context.Context, client JSONRPCClient, params json.RawMessage) error {
+	return closeSession(ctx, client, params)
+}
+
+func closeSession(ctx context.Context, client JSONRPCClient, params any) error {
 	var result map[string]any
 	return requestInto(ctx, client, "session/close", params, &result)
 }
 
 func DeleteSession(ctx context.Context, client JSONRPCClient, params DeleteSessionParams) error {
+	return deleteSession(ctx, client, params)
+}
+
+func DeleteSessionRaw(ctx context.Context, client JSONRPCClient, params json.RawMessage) error {
+	return deleteSession(ctx, client, params)
+}
+
+func deleteSession(ctx context.Context, client JSONRPCClient, params any) error {
 	var result map[string]any
 	return requestInto(ctx, client, "session/delete", params, &result)
 }
