@@ -53,6 +53,8 @@ runtime bridge.
 - runtime JSON-RPC client request/response matching, notifications, child
   events, error responses, malformed stdout failure, and request timeout
   cleanup
+- runtime JSON-RPC request cancellation sends `$/cancel_request` to the child
+  runtime while ignoring the later abandoned response
 - runtime JSON-RPC child request responses, including successful result replies
   and error replies written back to the child runtime
 - ACP initialize negotiation over the runtime JSON-RPC client, including client

@@ -236,6 +236,52 @@ func TestRequestContextCancellationDoesNotPoisonLaterResponse(t *testing.T) {
 	}
 }
 
+func TestRequestContextCancellationSendsProtocolCancelRequest(t *testing.T) {
+	client := newHelperClient(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	resultCh := make(chan error, 1)
+	go func() {
+		_, err := client.Request(ctx, "runtime/wait_cancel", nil)
+		resultCh <- err
+	}()
+
+	started := nextEvent(t, client)
+	if started.Method != "runtime/request_started" {
+		t.Fatalf("started event method = %q, want runtime/request_started", started.Method)
+	}
+	var startedParams struct {
+		RequestID json.RawMessage `json:"requestId"`
+	}
+	if err := json.Unmarshal(started.Params, &startedParams); err != nil {
+		t.Fatalf("decode started params: %v", err)
+	}
+	cancel()
+
+	cancelSeen := nextEvent(t, client)
+	if cancelSeen.Method != "runtime/cancel_seen" {
+		t.Fatalf("cancel event method = %q, want runtime/cancel_seen", cancelSeen.Method)
+	}
+	var cancelParams struct {
+		RequestID json.RawMessage `json:"requestId"`
+	}
+	if err := json.Unmarshal(cancelSeen.Params, &cancelParams); err != nil {
+		t.Fatalf("decode cancel params: %v", err)
+	}
+	if string(cancelParams.RequestID) != string(startedParams.RequestID) {
+		t.Fatalf("cancel request id = %s, want %s", cancelParams.RequestID, startedParams.RequestID)
+	}
+
+	select {
+	case err := <-resultCh:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("Request error = %v, want context canceled", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for cancelled request")
+	}
+}
+
 func newHelperClient(t testing.TB) *runtimejsonrpc.Client {
 	t.Helper()
 	t.Setenv("GO_WANT_RUNTIMEJSONRPC_HELPER", "1")
@@ -343,6 +389,34 @@ func TestRuntimeJSONRPCHelper(t *testing.T) {
 				"jsonrpc": "2.0",
 				"id":      json.RawMessage(msg.ID),
 				"result":  map[string]any{"late": true},
+			})
+		case "runtime/wait_cancel":
+			_ = encoder.Encode(map[string]any{
+				"jsonrpc": "2.0",
+				"method":  "runtime/request_started",
+				"params":  map[string]any{"requestId": json.RawMessage(msg.ID)},
+			})
+			var cancelMsg struct {
+				Method string `json:"method"`
+				Params struct {
+					RequestID json.RawMessage `json:"requestId"`
+				} `json:"params"`
+			}
+			if err := decoder.Decode(&cancelMsg); err != nil {
+				return
+			}
+			_ = encoder.Encode(map[string]any{
+				"jsonrpc": "2.0",
+				"method":  "runtime/cancel_seen",
+				"params": map[string]any{
+					"method":    cancelMsg.Method,
+					"requestId": cancelMsg.Params.RequestID,
+				},
+			})
+			_ = encoder.Encode(map[string]any{
+				"jsonrpc": "2.0",
+				"id":      json.RawMessage(msg.ID),
+				"result":  map[string]any{"cancelled": true},
 			})
 		case "runtime/quit":
 			_ = encoder.Encode(map[string]any{
