@@ -23,22 +23,22 @@
 
 ## Phase 3: Claude Code Runtime Bridge
 
-- use `internal/process` for every subprocess boundary
-- use `internal/runtimeproc` as the only process-backed runtime launcher
-- use `internal/runtimejsonrpc` for newline-delimited JSON-RPC over runtime
-  stdio
+- use `acp-adapter-kit/process` for every subprocess boundary
+- use `acp-adapter-kit/runtimeproc` as the only process-backed runtime launcher
+- use `acp-adapter-kit/runtimejsonrpc` for newline-delimited JSON-RPC over
+  runtime stdio
 - use `runtimejsonrpc.Client.Respond` for child runtime requests that need a
   JSON-RPC response instead of treating every child request as terminal
 - use `acp.MethodContext.Request` when a runtime child request must be
   forwarded to the ACP client and answered before the prompt can finish
-- use `internal/runtimeacp` for subprocess ACP lifecycle negotiation
+- use `acp-adapter-kit/runtimeacp` for subprocess ACP lifecycle negotiation
 - in runtime-backed mode, pass the child runtime initialize result through to
   the ACP client instead of advertising scaffold-only capabilities
 - forward auth methods (`authenticate`, `logout`) through the same typed
   runtime ACP and bridge seams
 - build real session bridges on the typed `runtimeacp` initialize/session
   calls before adding vendor-specific tool mappings
-- use `internal/runtimebridge` as the ACP server handler seam for
+- use `acp-adapter-kit/runtimebridge` as the ACP server handler seam for
   subprocess-backed sessions
 - keep session load/resume/fork/list/delete protocol forwarding in
   `runtimeacp`/`runtimebridge`; vendor-specific persistence belongs above it
@@ -48,8 +48,8 @@
   `modes`; never narrow runtime session setup responses down to `sessionId`
 - forward session configuration changes (`session/set_config_option`) and the
   legacy `session/set_mode` API without rewriting returned config state
-- use `internal/runtimehost` to compose process launch, runtime initialize, and
-  ACP server bridge options
+- use `acp-adapter-kit/runtimehost` to compose process launch, runtime
+  initialize, and ACP server bridge options
 - defer subprocess-backed runtime startup until the outer ACP client's
   `initialize` params are available, then pass those client capabilities into
   the child runtime handshake
@@ -59,12 +59,12 @@
   real runtime sessions
 - use `github.com/coder/acp-go-sdk` as the upstream source for generated ACP
   protocol primitives where its JSON shape matches the adapter contract
-- keep the local `internal/acp` stdio transport until an SDK-backed transport can
-  preserve the adapter's ordering and cancellation invariants: ordinary inbound
-  methods are processed in order, notifications and explicitly concurrent
-  methods can cut through a running method, server-to-client request IDs stay
-  visually distinct from inbound IDs, malformed/version-invalid messages produce
-  JSON-RPC errors, and the 1 MiB line cap remains enforced
+- keep the kit `acp` stdio transport until an SDK-backed transport can preserve
+  the adapter's ordering and cancellation invariants: ordinary inbound methods
+  are processed in order, notifications and explicitly concurrent methods can
+  cut through a running method, server-to-client request IDs stay visually
+  distinct from inbound IDs, malformed/version-invalid messages produce JSON-RPC
+  errors, and the 1 MiB line cap remains enforced
 - prefer small DTO/error aliases and parity tests before replacing larger
   runtime session payloads; generated SDK unions can be stricter than the
   adapter's current pass-through shapes
