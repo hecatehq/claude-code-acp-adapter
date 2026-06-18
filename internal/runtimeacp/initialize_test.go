@@ -33,6 +33,9 @@ func TestInitializeSendsClientInfoAndParsesResult(t *testing.T) {
 	if !result.AgentCapabilities.PromptCapabilities.Image {
 		t.Fatal("PromptCapabilities.Image = false, want true")
 	}
+	if !result.AgentCapabilities.MCPCapabilities.ACP {
+		t.Fatal("MCPCapabilities.ACP = false, want true")
+	}
 	if _, ok := result.AgentCapabilities.SessionCapabilities["list"]; !ok {
 		t.Fatalf("SessionCapabilities = %#v, want list", result.AgentCapabilities.SessionCapabilities)
 	}
@@ -178,6 +181,7 @@ func TestRuntimeACPInitializeHelper(t *testing.T) {
 						"embeddedContext": true,
 					},
 					"mcpCapabilities": map[string]any{
+						"acp":  true,
 						"http": true,
 					},
 					"sessionCapabilities": map[string]any{

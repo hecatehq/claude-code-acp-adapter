@@ -61,6 +61,7 @@ type PromptCapabilities struct {
 }
 
 type MCPAgentCapabilities struct {
+	ACP  bool `json:"acp,omitempty"`
 	HTTP bool `json:"http,omitempty"`
 	SSE  bool `json:"sse,omitempty"`
 }
