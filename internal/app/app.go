@@ -70,7 +70,7 @@ func newRootCommand(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.
 				defer func() {
 					_ = host.Close()
 				}()
-				opts = host.Options()
+				opts = append([]acp.Option{acp.WithInitializeResult(host.InitializeResult())}, host.Options()...)
 			}
 			server := acp.NewServer(info, opts...)
 			if err := server.Serve(stdin, stdout); err != nil {

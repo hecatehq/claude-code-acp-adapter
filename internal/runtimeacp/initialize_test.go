@@ -33,6 +33,9 @@ func TestInitializeSendsClientInfoAndParsesResult(t *testing.T) {
 	if !result.AgentCapabilities.PromptCapabilities.Image {
 		t.Fatal("PromptCapabilities.Image = false, want true")
 	}
+	if _, ok := result.AgentCapabilities.SessionCapabilities["list"]; !ok {
+		t.Fatalf("SessionCapabilities = %#v, want list", result.AgentCapabilities.SessionCapabilities)
+	}
 }
 
 func TestInitializeRejectsUnsupportedProtocolVersion(t *testing.T) {
@@ -169,12 +172,16 @@ func TestRuntimeACPInitializeHelper(t *testing.T) {
 			"result": map[string]any{
 				"protocolVersion": 1,
 				"agentCapabilities": map[string]any{
+					"loadSession": true,
 					"promptCapabilities": map[string]any{
 						"image":           true,
 						"embeddedContext": true,
 					},
 					"mcpCapabilities": map[string]any{
 						"http": true,
+					},
+					"sessionCapabilities": map[string]any{
+						"list": map[string]any{},
 					},
 				},
 				"agentInfo": map[string]any{

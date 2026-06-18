@@ -7,6 +7,8 @@ runtime bridge.
 
 - CLI version output
 - ACP `initialize` response shape
+- runtime-backed initialize passthrough so child agent info, capabilities, and
+  auth methods reach the ACP client
 - request ID preservation
 - server-to-client JSON-RPC requests from handlers, including successful
   client responses and client RPC errors
@@ -39,6 +41,7 @@ runtime bridge.
 - ACP initialize negotiation over the runtime JSON-RPC client, including client
   info/capabilities, agent capability parsing, protocol-version mismatch, and
   runtime RPC error propagation
+- session capability preservation in runtime initialize results
 - ACP session lifecycle calls over the runtime JSON-RPC client: `session/new`,
   `session/prompt`, `session/cancel`, `session/close`, session updates, stop
   reasons, MCP server payloads, and RPC error propagation

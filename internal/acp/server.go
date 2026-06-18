@@ -26,6 +26,7 @@ type Capabilities struct {
 
 type Server struct {
 	info          AdapterInfo
+	initialize    any
 	methods       map[string]MethodHandler
 	notifications map[string]NotificationHandler
 }
@@ -89,6 +90,12 @@ func WithMethod(method string, handler MethodHandler) Option {
 func WithNotification(method string, handler NotificationHandler) Option {
 	return func(s *Server) {
 		s.notifications[method] = handler
+	}
+}
+
+func WithInitializeResult(result any) Option {
+	return func(s *Server) {
+		s.initialize = result
 	}
 }
 
@@ -165,6 +172,9 @@ func (s *Server) handle(ctx *MethodContext, req request) response {
 
 	switch req.Method {
 	case "initialize":
+		if s.initialize != nil {
+			return resultResponse(req.ID, s.initialize)
+		}
 		return resultResponse(req.ID, initializeResult{
 			ProtocolVersion: 1,
 			AgentCapabilities: agentCapabilities{

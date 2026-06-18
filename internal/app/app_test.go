@@ -80,6 +80,21 @@ func TestRuntimeFlagsStartProcessBackedACPBridge(t *testing.T) {
 	if responses[0].Error != nil {
 		t.Fatalf("initialize error = %+v", responses[0].Error)
 	}
+	var initialize struct {
+		AgentInfo struct {
+			Name string `json:"name"`
+		} `json:"agentInfo"`
+		AgentCapabilities struct {
+			LoadSession bool `json:"loadSession"`
+		} `json:"agentCapabilities"`
+	}
+	decodeAppResult(t, responses[0], &initialize)
+	if initialize.AgentInfo.Name != "app-helper-runtime" {
+		t.Fatalf("initialize agent name = %q, want app-helper-runtime", initialize.AgentInfo.Name)
+	}
+	if !initialize.AgentCapabilities.LoadSession {
+		t.Fatal("initialize loadSession = false, want true")
+	}
 	var session struct {
 		SessionID string `json:"sessionId"`
 	}
@@ -184,6 +199,9 @@ func TestAppRuntimeHelper(t *testing.T) {
 				"result": map[string]any{
 					"protocolVersion": 1,
 					"agentInfo":       map[string]any{"name": "app-helper-runtime"},
+					"agentCapabilities": map[string]any{
+						"loadSession": true,
+					},
 				},
 			})
 		case "session/new":

@@ -47,10 +47,11 @@ type InitializeResult struct {
 }
 
 type AgentCapabilities struct {
-	LoadSession        bool                       `json:"loadSession,omitempty"`
-	PromptCapabilities PromptCapabilities         `json:"promptCapabilities,omitempty"`
-	MCPCapabilities    MCPAgentCapabilities       `json:"mcpCapabilities,omitempty"`
-	Auth               map[string]json.RawMessage `json:"auth,omitempty"`
+	LoadSession         bool                       `json:"loadSession,omitempty"`
+	PromptCapabilities  PromptCapabilities         `json:"promptCapabilities,omitempty"`
+	MCPCapabilities     MCPAgentCapabilities       `json:"mcpCapabilities,omitempty"`
+	Auth                map[string]json.RawMessage `json:"auth,omitempty"`
+	SessionCapabilities map[string]json.RawMessage `json:"sessionCapabilities,omitempty"`
 }
 
 type PromptCapabilities struct {

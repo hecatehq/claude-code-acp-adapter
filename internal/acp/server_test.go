@@ -41,6 +41,49 @@ func TestInitializeResponse(t *testing.T) {
 	}
 }
 
+func TestInitializeCanUseRuntimeResult(t *testing.T) {
+	server := NewServer(AdapterInfo{Name: "claude-code-acp-adapter"}, WithInitializeResult(map[string]any{
+		"protocolVersion": 1,
+		"agentCapabilities": map[string]any{
+			"loadSession": true,
+			"sessionCapabilities": map[string]any{
+				"list": map[string]any{},
+			},
+		},
+		"agentInfo": map[string]any{
+			"name": "runtime-agent",
+		},
+		"authMethods": []any{map[string]any{"id": "runtime-auth"}},
+	}))
+
+	var out bytes.Buffer
+	err := server.Serve(strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`+"\n"), &out)
+	if err != nil {
+		t.Fatalf("Serve returned error: %v", err)
+	}
+
+	var got map[string]any
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatalf("decode response: %v\n%s", err, out.String())
+	}
+	result := got["result"].(map[string]any)
+	info := result["agentInfo"].(map[string]any)
+	if info["name"] != "runtime-agent" {
+		t.Fatalf("agent name = %v, want runtime-agent", info["name"])
+	}
+	caps := result["agentCapabilities"].(map[string]any)
+	if caps["loadSession"] != true {
+		t.Fatalf("loadSession = %v, want true", caps["loadSession"])
+	}
+	if _, ok := caps["sessionCapabilities"].(map[string]any)["list"]; !ok {
+		t.Fatalf("sessionCapabilities = %#v, want list", caps["sessionCapabilities"])
+	}
+	auth := result["authMethods"].([]any)
+	if len(auth) != 1 {
+		t.Fatalf("authMethods len = %d, want 1", len(auth))
+	}
+}
+
 func TestPromptReturnsStructuredNotImplemented(t *testing.T) {
 	server := NewServer(AdapterInfo{Name: "claude-code-acp-adapter"})
 

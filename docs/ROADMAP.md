@@ -32,6 +32,8 @@
 - use `acp.MethodContext.Request` when a runtime child request must be
   forwarded to the ACP client and answered before the prompt can finish
 - use `internal/runtimeacp` for subprocess ACP lifecycle negotiation
+- in runtime-backed mode, pass the child runtime initialize result through to
+  the ACP client instead of advertising scaffold-only capabilities
 - build real session bridges on the typed `runtimeacp` initialize/session
   calls before adding vendor-specific tool mappings
 - use `internal/runtimebridge` as the ACP server handler seam for
