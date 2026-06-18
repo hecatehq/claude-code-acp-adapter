@@ -34,7 +34,8 @@ runtime bridge.
 - session close and post-close not-found behavior
 - scaffold `session/prompt` not-implemented errors
 - scaffold known ACP methods return structured not-implemented errors instead
-  of method-not-found when no runtime binary is configured
+  of method-not-found when no runtime binary is configured, including unstable
+  SDK-known document, provider, and NES methods
 - 1 MiB inbound message cap
 - hardened process runner behavior: fixed argv, shell rejection, absolute cwd
   enforcement, env allowlists, redaction, output caps, missing-binary errors,
