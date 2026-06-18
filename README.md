@@ -33,7 +33,8 @@ Implemented:
 - typed ACP session lifecycle calls for subprocess runtimes
 - ACP server-to-runtime bridge for session methods and streamed updates
 - runtime host seam that launches, initializes, and exposes the bridged child
-- protocol forwarding for session load, resume, list, and delete
+- protocol forwarding for session load, resume, fork, list, delete, and
+  MCP-over-ACP message payloads
 - CI and tag-driven release packaging for unsigned alpha binaries
 
 Not implemented yet:

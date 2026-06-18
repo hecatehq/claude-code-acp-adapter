@@ -31,12 +31,14 @@ func (b *Bridge) Options() []acp.Option {
 		acp.WithMethod("authenticate", b.authenticate),
 		acp.WithMethod("logout", b.logout),
 		acp.WithMethod("session/new", b.newSession),
+		acp.WithMethod("session/fork", b.forkSession),
 		acp.WithMethod("session/load", b.loadSession),
 		acp.WithMethod("session/resume", b.resumeSession),
 		acp.WithMethod("session/list", b.listSessions),
 		acp.WithMethod("session/set_config_option", b.setConfigOption),
 		acp.WithMethod("session/set_mode", b.setMode),
 		acp.WithMethod("session/prompt", b.prompt),
+		acp.WithMethod("mcp/message", b.mcpMessage),
 		acp.WithConcurrentMethod("session/cancel", b.cancelMethod),
 		acp.WithMethod("session/close", b.closeSession),
 		acp.WithMethod("session/delete", b.deleteSession),
@@ -73,6 +75,16 @@ func (b *Bridge) newSession(ctx *acp.MethodContext, params json.RawMessage) (any
 	}
 	return b.callWithEvents(ctx, func() (any, error) {
 		return runtimeacp.NewSession(context.Background(), b.runtime, req)
+	})
+}
+
+func (b *Bridge) forkSession(ctx *acp.MethodContext, params json.RawMessage) (any, *acp.RPCError) {
+	var req runtimeacp.ForkSessionParams
+	if rpcErr := decodeParams(params, &req); rpcErr != nil {
+		return nil, rpcErr
+	}
+	return b.callWithEvents(ctx, func() (any, error) {
+		return runtimeacp.ForkSession(context.Background(), b.runtime, req)
 	})
 }
 
@@ -142,6 +154,18 @@ func (b *Bridge) prompt(ctx *acp.MethodContext, params json.RawMessage) (any, *a
 	return b.callWithEvents(ctx, func() (any, error) {
 		return runtimeacp.Prompt(context.Background(), b.runtime, req)
 	})
+}
+
+func (b *Bridge) mcpMessage(_ *acp.MethodContext, params json.RawMessage) (any, *acp.RPCError) {
+	var req runtimeacp.MCPMessageParams
+	if rpcErr := decodeParams(params, &req); rpcErr != nil {
+		return nil, rpcErr
+	}
+	result, err := runtimeacp.MCPMessage(context.Background(), b.runtime, req)
+	if err != nil {
+		return nil, mapRuntimeError(err)
+	}
+	return result, nil
 }
 
 func (b *Bridge) cancelMethod(_ *acp.MethodContext, params json.RawMessage) (any, *acp.RPCError) {

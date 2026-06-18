@@ -358,6 +358,29 @@ func TestLoadSessionForwardsReplayBeforeResponse(t *testing.T) {
 	}
 }
 
+func TestForkSessionProxiesRuntimeResult(t *testing.T) {
+	runtime := newFakeRuntimeClient()
+	client := newBridgeClient(t, runtime)
+
+	response := client.Request("session/fork", map[string]any{
+		"sessionId":             "sess-bridge",
+		"cwd":                   "/tmp/project",
+		"additionalDirectories": []string{"/tmp/shared"},
+		"mcpServers":            []map[string]any{{"name": "filesystem", "command": "/bin/mcp"}},
+	})
+	var result map[string]any
+	response.ResultInto(t, &result)
+	if result["sessionId"] != "forked-bridge" || result["source"] != "fork" {
+		t.Fatalf("fork result = %#v, want forked-bridge source fork", result)
+	}
+	if _, ok := result["configOptions"]; !ok {
+		t.Fatalf("fork result = %#v, want configOptions preserved", result)
+	}
+	if runtime.called("session/fork") != 1 {
+		t.Fatalf("session/fork calls = %d, want 1", runtime.called("session/fork"))
+	}
+}
+
 func TestResumeSessionProxiesRuntimeResult(t *testing.T) {
 	runtime := newFakeRuntimeClient()
 	client := newBridgeClient(t, runtime)
@@ -392,6 +415,31 @@ func TestListSessionsProxiesRuntimeResult(t *testing.T) {
 	}
 	if result.NextCursor != "next" {
 		t.Fatalf("NextCursor = %q, want next", result.NextCursor)
+	}
+}
+
+func TestMCPMessageProxiesRuntimeResult(t *testing.T) {
+	runtime := newFakeRuntimeClient()
+	client := newBridgeClient(t, runtime)
+
+	response := client.Request("mcp/message", map[string]any{
+		"connectionId": "mcp-conn",
+		"method":       "tools/list",
+		"params":       map[string]any{"cursor": "next"},
+	})
+	var result struct {
+		JSONRPC string `json:"jsonrpc"`
+		ID      int    `json:"id"`
+		Result  struct {
+			OK bool `json:"ok"`
+		} `json:"result"`
+	}
+	response.ResultInto(t, &result)
+	if result.JSONRPC != "2.0" || result.ID != 1 || !result.Result.OK {
+		t.Fatalf("mcp/message result = %#v, want raw MCP response", result)
+	}
+	if runtime.called("mcp/message") != 1 {
+		t.Fatalf("mcp/message calls = %d, want 1", runtime.called("mcp/message"))
 	}
 }
 
@@ -690,6 +738,8 @@ func (f *fakeRuntimeClient) Request(_ctx context.Context, method string, params 
 			Params: json.RawMessage(`{"sessionId":"sess-bridge","update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"replay"}}}`),
 		}
 		return json.RawMessage(`null`), nil
+	case "session/fork":
+		return json.RawMessage(`{"sessionId":"forked-bridge","configOptions":[{"id":"model","name":"Model","type":"select","currentValue":"smart","options":[{"value":"smart","name":"Smart"}]}],"modes":{"currentModeId":"code"},"source":"fork"}`), nil
 	case "session/resume":
 		return json.RawMessage(`{"mode":"default"}`), nil
 	case "session/list":
@@ -708,6 +758,8 @@ func (f *fakeRuntimeClient) Request(_ctx context.Context, method string, params 
 		return json.RawMessage(`{"configOptions":[{"id":"model","name":"Model","type":"select","currentValue":"smart","options":[{"value":"smart","name":"Smart"}]}]}`), nil
 	case "session/set_mode":
 		return json.RawMessage(`{"modes":{"currentModeId":"code","availableModes":[{"id":"code","name":"Code"}]}}`), nil
+	case "mcp/message":
+		return json.RawMessage(`{"jsonrpc":"2.0","id":1,"result":{"ok":true}}`), nil
 	case "authenticate":
 		return json.RawMessage(`{}`), nil
 	case "logout":

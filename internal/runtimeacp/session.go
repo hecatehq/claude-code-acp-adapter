@@ -25,6 +25,21 @@ type NewSessionResult struct {
 	raw json.RawMessage
 }
 
+type ForkSessionParams struct {
+	SessionID             string      `json:"sessionId"`
+	CWD                   string      `json:"cwd"`
+	MCPServers            []MCPServer `json:"mcpServers,omitempty"`
+	AdditionalDirectories []string    `json:"additionalDirectories,omitempty"`
+}
+
+type ForkSessionResult struct {
+	SessionID     string            `json:"sessionId"`
+	ConfigOptions []json.RawMessage `json:"configOptions,omitempty"`
+	Modes         json.RawMessage   `json:"modes,omitempty"`
+
+	raw json.RawMessage
+}
+
 type LoadSessionParams struct {
 	SessionID             string      `json:"sessionId"`
 	CWD                   string      `json:"cwd"`
@@ -147,6 +162,30 @@ func (r NewSessionResult) MarshalJSON() ([]byte, error) {
 		return append([]byte(nil), r.raw...), nil
 	}
 	type alias NewSessionResult
+	return json.Marshal(alias(r))
+}
+
+func ForkSession(ctx context.Context, client JSONRPCClient, params ForkSessionParams) (ForkSessionResult, error) {
+	resultData, err := requestRaw(ctx, client, "session/fork", params)
+	if err != nil {
+		return ForkSessionResult{}, err
+	}
+	var result ForkSessionResult
+	if err := json.Unmarshal(resultData, &result); err != nil {
+		return ForkSessionResult{}, fmt.Errorf("decode session/fork result: %w", err)
+	}
+	if result.SessionID == "" {
+		return ForkSessionResult{}, errors.New("session/fork result missing sessionId")
+	}
+	result.raw = append(json.RawMessage(nil), resultData...)
+	return result, nil
+}
+
+func (r ForkSessionResult) MarshalJSON() ([]byte, error) {
+	if len(r.raw) != 0 {
+		return append([]byte(nil), r.raw...), nil
+	}
+	type alias ForkSessionResult
 	return json.Marshal(alias(r))
 }
 

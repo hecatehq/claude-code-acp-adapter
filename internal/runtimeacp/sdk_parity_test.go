@@ -88,6 +88,36 @@ func TestCloseSessionParamsMatchCoderSDKJSONShape(t *testing.T) {
 	)
 }
 
+func TestForkSessionParamsMatchCoderSDKJSONShape(t *testing.T) {
+	assertSameJSONShape(t,
+		runtimeacp.ForkSessionParams{
+			SessionID:             "sess-test",
+			CWD:                   "/tmp/project",
+			AdditionalDirectories: []string{"/tmp/shared"},
+		},
+		sdk.UnstableForkSessionRequest{
+			SessionId:             sdk.SessionId("sess-test"),
+			Cwd:                   "/tmp/project",
+			AdditionalDirectories: []string{"/tmp/shared"},
+		},
+	)
+}
+
+func TestMCPMessageParamsMatchCoderSDKJSONShape(t *testing.T) {
+	assertSameJSONShape(t,
+		runtimeacp.MCPMessageParams{
+			ConnectionID: "mcp-conn",
+			Method:       "tools/list",
+			Params:       json.RawMessage(`{"cursor":"next"}`),
+		},
+		sdk.UnstableMessageMcpRequest{
+			ConnectionId: sdk.UnstableMcpConnectionId("mcp-conn"),
+			Method:       "tools/list",
+			Params:       map[string]any{"cursor": "next"},
+		},
+	)
+}
+
 func assertSameJSONShape(t testing.TB, local any, upstream any) {
 	t.Helper()
 	localMap := marshalObject(t, local)

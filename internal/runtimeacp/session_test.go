@@ -82,6 +82,32 @@ func TestPromptSendsTextContentAndParsesStopReason(t *testing.T) {
 	}
 }
 
+func TestForkSessionSendsWorkspaceAndPreservesRuntimeResult(t *testing.T) {
+	client := newSessionClient(t)
+
+	result, err := runtimeacp.ForkSession(context.Background(), client, runtimeacp.ForkSessionParams{
+		SessionID:             "sess-test",
+		CWD:                   "/tmp/project",
+		AdditionalDirectories: []string{"/tmp/shared"},
+		MCPServers:            []runtimeacp.MCPServer{{Name: "filesystem", Command: "/bin/mcp"}},
+	})
+	if err != nil {
+		t.Fatalf("ForkSession returned error: %v", err)
+	}
+	if result.SessionID != "forked-session" {
+		t.Fatalf("SessionID = %q, want forked-session", result.SessionID)
+	}
+	raw, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("marshal result: %v", err)
+	}
+	if !strings.Contains(string(raw), `"configOptions"`) ||
+		!strings.Contains(string(raw), `"modes"`) ||
+		!strings.Contains(string(raw), `"source":"fork"`) {
+		t.Fatalf("marshaled result = %s, want configOptions, modes, and source preserved", raw)
+	}
+}
+
 func TestLoadSessionSendsWorkspaceAndReplaysUpdates(t *testing.T) {
 	client := newSessionClient(t)
 
@@ -351,6 +377,32 @@ func TestRuntimeACPSessionHelper(t *testing.T) {
 				"jsonrpc": "2.0",
 				"id":      json.RawMessage(req.ID),
 				"result":  nil,
+			})
+		case "session/fork":
+			var params runtimeacp.ForkSessionParams
+			if err := json.Unmarshal(req.Params, &params); err != nil ||
+				params.SessionID != "sess-test" ||
+				params.CWD != "/tmp/project" ||
+				len(params.MCPServers) != 1 ||
+				len(params.AdditionalDirectories) != 1 {
+				writeSessionError(encoder, req.ID, -32602, "bad fork params")
+				continue
+			}
+			_ = encoder.Encode(map[string]any{
+				"jsonrpc": "2.0",
+				"id":      json.RawMessage(req.ID),
+				"result": map[string]any{
+					"sessionId": "forked-session",
+					"configOptions": []map[string]any{{
+						"id":           "model",
+						"name":         "Model",
+						"type":         "select",
+						"currentValue": "smart",
+						"options":      []map[string]any{{"value": "smart", "name": "Smart"}},
+					}},
+					"modes":  map[string]any{"currentModeId": "code"},
+					"source": "fork",
+				},
 			})
 		case "session/resume":
 			var params runtimeacp.ResumeSessionParams
