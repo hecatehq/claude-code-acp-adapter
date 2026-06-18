@@ -9,6 +9,8 @@ runtime bridge.
 - ACP `initialize` response shape
 - runtime-backed initialize passthrough so child agent info, capabilities, and
   auth methods reach the ACP client
+- runtime ACP auth calls: `authenticate` method-id forwarding and `logout`
+  request forwarding
 - request ID preservation
 - server-to-client JSON-RPC requests from handlers, including successful
   client responses and client RPC errors
@@ -55,6 +57,7 @@ runtime bridge.
   delete methods
 - ACP bridge forwarding for runtime child requests that require client
   responses, including returning the client result to the child runtime
+- ACP bridge forwarding for `authenticate` and `logout`
 - runtime host composition: subprocess launch, ACP initialize handshake,
   initialize result retention, bridge option exposure, prompt update forwarding,
   and protocol-version mismatch cleanup

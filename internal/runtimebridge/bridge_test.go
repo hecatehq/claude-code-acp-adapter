@@ -194,6 +194,32 @@ func TestDeleteSessionProxiesToRuntime(t *testing.T) {
 	}
 }
 
+func TestAuthenticateProxiesToRuntime(t *testing.T) {
+	runtime := newFakeRuntimeClient()
+	client := newBridgeClient(t, runtime)
+
+	response := client.Request("authenticate", map[string]string{"methodId": "agent-login"})
+	if response.Error != nil {
+		t.Fatalf("authenticate error = %+v", response.Error)
+	}
+	if runtime.called("authenticate") != 1 {
+		t.Fatalf("authenticate calls = %d, want 1", runtime.called("authenticate"))
+	}
+}
+
+func TestLogoutProxiesToRuntime(t *testing.T) {
+	runtime := newFakeRuntimeClient()
+	client := newBridgeClient(t, runtime)
+
+	response := client.Request("logout", map[string]any{})
+	if response.Error != nil {
+		t.Fatalf("logout error = %+v", response.Error)
+	}
+	if runtime.called("logout") != 1 {
+		t.Fatalf("logout calls = %d, want 1", runtime.called("logout"))
+	}
+}
+
 func TestRuntimeRPCErrorMapsToACPError(t *testing.T) {
 	runtime := newFakeRuntimeClient()
 	runtime.err = &runtimejsonrpc.RPCError{Code: -32010, Message: "runtime exploded"}
@@ -289,6 +315,10 @@ func (f *fakeRuntimeClient) Request(_ctx context.Context, method string, params 
 	case "session/close":
 		return json.RawMessage(`{}`), nil
 	case "session/delete":
+		return json.RawMessage(`{}`), nil
+	case "authenticate":
+		return json.RawMessage(`{}`), nil
+	case "logout":
 		return json.RawMessage(`{}`), nil
 	default:
 		return nil, &runtimejsonrpc.RPCError{Code: -32601, Message: "method not found"}

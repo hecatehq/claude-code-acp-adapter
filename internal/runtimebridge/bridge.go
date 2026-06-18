@@ -28,6 +28,8 @@ func New(runtime RuntimeClient) *Bridge {
 
 func (b *Bridge) Options() []acp.Option {
 	return []acp.Option{
+		acp.WithMethod("authenticate", b.authenticate),
+		acp.WithMethod("logout", b.logout),
 		acp.WithMethod("session/new", b.newSession),
 		acp.WithMethod("session/load", b.loadSession),
 		acp.WithMethod("session/resume", b.resumeSession),
@@ -38,6 +40,28 @@ func (b *Bridge) Options() []acp.Option {
 		acp.WithMethod("session/delete", b.deleteSession),
 		acp.WithNotification("session/cancel", b.cancelNotification),
 	}
+}
+
+func (b *Bridge) authenticate(_ *acp.MethodContext, params json.RawMessage) (any, *acp.RPCError) {
+	var req runtimeacp.AuthenticateParams
+	if rpcErr := decodeParams(params, &req); rpcErr != nil {
+		return nil, rpcErr
+	}
+	if err := runtimeacp.Authenticate(context.Background(), b.runtime, req); err != nil {
+		return nil, mapRuntimeError(err)
+	}
+	return map[string]any{}, nil
+}
+
+func (b *Bridge) logout(_ *acp.MethodContext, params json.RawMessage) (any, *acp.RPCError) {
+	var req map[string]any
+	if rpcErr := decodeParams(params, &req); rpcErr != nil {
+		return nil, rpcErr
+	}
+	if err := runtimeacp.Logout(context.Background(), b.runtime); err != nil {
+		return nil, mapRuntimeError(err)
+	}
+	return map[string]any{}, nil
 }
 
 func (b *Bridge) newSession(_ *acp.MethodContext, params json.RawMessage) (any, *acp.RPCError) {
