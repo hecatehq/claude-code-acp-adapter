@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	adapterprocess "github.com/hecatehq/claude-code-acp-adapter/internal/process"
+	adapterprocess "github.com/hecatehq/acp-adapter-kit/process"
 )
 
 const DefaultOutputLimit int64 = 64 * 1024
