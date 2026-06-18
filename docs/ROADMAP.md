@@ -44,6 +44,8 @@
   `runtimeacp`/`runtimebridge`; vendor-specific persistence belongs above it
 - preserve extra `session/new` result fields such as `configOptions` and
   `modes`; never narrow runtime session setup responses down to `sessionId`
+- forward session configuration changes (`session/set_config_option`) and the
+  legacy `session/set_mode` API without rewriting returned config state
 - use `internal/runtimehost` to compose process launch, runtime initialize, and
   ACP server bridge options
 - expose the subprocess-backed runtime path only through explicit root runtime

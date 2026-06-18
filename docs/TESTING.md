@@ -49,6 +49,8 @@ runtime bridge.
   reasons, MCP server payloads, and RPC error propagation
 - `session/new` result preservation for runtime-provided `configOptions` and
   legacy `modes`, so model/reasoning/mode selectors survive the bridge
+- runtime ACP config/mode setters: `session/set_config_option` and
+  `session/set_mode` raw result forwarding
 - ACP session load/resume/list/delete protocol calls, including replay updates,
   raw resume result preservation, listed session metadata, cursor parsing, and
   delete request forwarding
@@ -60,6 +62,8 @@ runtime bridge.
 - ACP bridge forwarding for runtime child requests that require client
   responses, including returning the client result to the child runtime
 - ACP bridge forwarding for `authenticate` and `logout`
+- ACP bridge forwarding for `session/set_config_option` and legacy
+  `session/set_mode`
 - runtime host composition: subprocess launch, ACP initialize handshake,
   initialize result retention, bridge option exposure, prompt update forwarding,
   and protocol-version mismatch cleanup

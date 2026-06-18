@@ -34,6 +34,8 @@ func (b *Bridge) Options() []acp.Option {
 		acp.WithMethod("session/load", b.loadSession),
 		acp.WithMethod("session/resume", b.resumeSession),
 		acp.WithMethod("session/list", b.listSessions),
+		acp.WithMethod("session/set_config_option", b.setConfigOption),
+		acp.WithMethod("session/set_mode", b.setMode),
 		acp.WithMethod("session/prompt", b.prompt),
 		acp.WithMethod("session/cancel", b.cancelMethod),
 		acp.WithMethod("session/close", b.closeSession),
@@ -104,6 +106,30 @@ func (b *Bridge) listSessions(_ *acp.MethodContext, params json.RawMessage) (any
 		return nil, rpcErr
 	}
 	result, err := runtimeacp.ListSessions(context.Background(), b.runtime, req)
+	if err != nil {
+		return nil, mapRuntimeError(err)
+	}
+	return result, nil
+}
+
+func (b *Bridge) setConfigOption(_ *acp.MethodContext, params json.RawMessage) (any, *acp.RPCError) {
+	var req runtimeacp.SetConfigOptionParams
+	if rpcErr := decodeParams(params, &req); rpcErr != nil {
+		return nil, rpcErr
+	}
+	result, err := runtimeacp.SetConfigOption(context.Background(), b.runtime, req)
+	if err != nil {
+		return nil, mapRuntimeError(err)
+	}
+	return result, nil
+}
+
+func (b *Bridge) setMode(_ *acp.MethodContext, params json.RawMessage) (any, *acp.RPCError) {
+	var req runtimeacp.SetModeParams
+	if rpcErr := decodeParams(params, &req); rpcErr != nil {
+		return nil, rpcErr
+	}
+	result, err := runtimeacp.SetMode(context.Background(), b.runtime, req)
 	if err != nil {
 		return nil, mapRuntimeError(err)
 	}

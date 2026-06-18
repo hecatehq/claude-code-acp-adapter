@@ -199,6 +199,37 @@ func TestDeleteSessionProxiesToRuntime(t *testing.T) {
 	}
 }
 
+func TestSetConfigOptionProxiesRuntimeResult(t *testing.T) {
+	runtime := newFakeRuntimeClient()
+	client := newBridgeClient(t, runtime)
+
+	response := client.Request("session/set_config_option", map[string]string{
+		"sessionId": "sess-bridge",
+		"configId":  "model",
+		"value":     "smart",
+	})
+	var result map[string]any
+	response.ResultInto(t, &result)
+	if _, ok := result["configOptions"]; !ok {
+		t.Fatalf("set_config_option result = %#v, want configOptions", result)
+	}
+}
+
+func TestSetModeProxiesRuntimeResult(t *testing.T) {
+	runtime := newFakeRuntimeClient()
+	client := newBridgeClient(t, runtime)
+
+	response := client.Request("session/set_mode", map[string]string{
+		"sessionId": "sess-bridge",
+		"modeId":    "code",
+	})
+	var result map[string]any
+	response.ResultInto(t, &result)
+	if _, ok := result["modes"]; !ok {
+		t.Fatalf("set_mode result = %#v, want modes", result)
+	}
+}
+
 func TestAuthenticateProxiesToRuntime(t *testing.T) {
 	runtime := newFakeRuntimeClient()
 	client := newBridgeClient(t, runtime)
@@ -321,6 +352,10 @@ func (f *fakeRuntimeClient) Request(_ctx context.Context, method string, params 
 		return json.RawMessage(`{}`), nil
 	case "session/delete":
 		return json.RawMessage(`{}`), nil
+	case "session/set_config_option":
+		return json.RawMessage(`{"configOptions":[{"id":"model","name":"Model","type":"select","currentValue":"smart","options":[{"value":"smart","name":"Smart"}]}]}`), nil
+	case "session/set_mode":
+		return json.RawMessage(`{"modes":{"currentModeId":"code","availableModes":[{"id":"code","name":"Code"}]}}`), nil
 	case "authenticate":
 		return json.RawMessage(`{}`), nil
 	case "logout":
