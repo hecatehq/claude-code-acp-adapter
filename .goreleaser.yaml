@@ -1,0 +1,53 @@
+version: 2
+
+project_name: claude-code-acp-adapter
+
+before:
+  hooks:
+    - go mod tidy
+    - go test ./...
+
+builds:
+  - id: claude-code-acp-adapter
+    main: ./cmd/claude-code-acp-adapter
+    binary: claude-code-acp-adapter
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X github.com/hecatehq/claude-code-acp-adapter/internal/app.Version={{ .Version }}
+
+archives:
+  - id: binaries
+    ids:
+      - claude-code-acp-adapter
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  use: github
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+release:
+  prerelease: auto

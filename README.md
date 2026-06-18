@@ -34,6 +34,7 @@ Implemented:
 - ACP server-to-runtime bridge for session methods and streamed updates
 - runtime host seam that launches, initializes, and exposes the bridged child
 - protocol forwarding for session load, resume, list, and delete
+- CI and tag-driven release packaging for unsigned alpha binaries
 
 Not implemented yet:
 
@@ -41,11 +42,13 @@ Not implemented yet:
 - vendor-specific persistent session semantics
 - vendor-specific prompt/tool/permission/elicitation mapping
 - runtime config/auth/model discovery and orphan-result handling
-- release packaging
+- production signing/provenance for release artifacts
 
 ## Development
 
 ```sh
+make release-check
+make snapshot
 go test ./...
 go test -race ./...
 go vet ./...
@@ -55,6 +58,7 @@ go run ./cmd/claude-code-acp-adapter doctor
 
 See [docs/TESTING.md](docs/TESTING.md) for what is covered today and what must
 be covered before this adapter can replace the current Claude Agent ACP bridge.
+See [docs/RELEASE.md](docs/RELEASE.md) for the tag-driven release flow.
 
 ## CLI Contract
 

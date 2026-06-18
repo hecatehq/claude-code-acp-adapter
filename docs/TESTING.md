@@ -89,6 +89,8 @@ runtime bridge.
 - Coder ACP SDK compatibility guardrails for the adopted protocol primitives:
   JSON-RPC error shape, default initialize protocol version, and selected
   runtime ACP request JSON shapes
+- release packaging gate through `make release-check`: unit tests, race tests,
+  vet, and a version-stamped local binary build
 
 ## Not Covered Yet
 
@@ -112,7 +114,7 @@ adapter to this one:
 - orphan result skipping after cancelled queued prompts
 - query-closed errors for prompts/cancels after stream termination
 - local slash-command metadata stripping
-- deterministic release binaries
+- production release signing/provenance
 
 ## Test Strategy
 
