@@ -17,10 +17,11 @@ import (
 )
 
 const (
-	Name    = "claude-code-acp-adapter"
-	Title   = "Claude Code ACP Adapter"
-	Version = "0.0.0-dev"
+	Name  = "claude-code-acp-adapter"
+	Title = "Claude Code ACP Adapter"
 )
+
+var Version = "0.0.0-dev"
 
 func Run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
 	cmd := newRootCommand(stdin, stdout, stderr)
