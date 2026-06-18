@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sync"
 )
 
 const maxMessageBytes = 1024 * 1024
@@ -41,12 +42,14 @@ type MethodHandler func(ctx *MethodContext, params json.RawMessage) (any, *RPCEr
 type NotificationHandler func(params json.RawMessage) error
 
 type MethodContext struct {
-	encoder *json.Encoder
-	conn    *connection
+	conn *connection
 }
 
 func (c *MethodContext) Notify(method string, params any) error {
-	return c.encoder.Encode(serverNotification{
+	if c == nil || c.conn == nil {
+		return errors.New("method context is not connected")
+	}
+	return c.conn.write(serverNotification{
 		JSONRPC: "2.0",
 		Method:  method,
 		Params:  params,
@@ -57,31 +60,24 @@ func (c *MethodContext) Request(method string, params any) (json.RawMessage, *RP
 	if c == nil || c.conn == nil {
 		return nil, nil, errors.New("method context is not connected")
 	}
-	id := c.conn.nextRequestID()
-	if err := c.encoder.Encode(serverRequest{
+	id, resultCh, err := c.conn.registerRequest()
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := c.conn.write(serverRequest{
 		JSONRPC: "2.0",
 		ID:      id,
 		Method:  method,
 		Params:  params,
 	}); err != nil {
+		c.conn.removeRequest(id)
 		return nil, nil, err
 	}
-	for {
-		msg, ok, err := c.conn.readMessage()
-		if err != nil {
-			return nil, nil, err
-		}
-		if !ok {
-			return nil, nil, io.EOF
-		}
-		if msg.ID != nil && msg.Method == "" && string(*msg.ID) == string(id) {
-			return append(json.RawMessage(nil), msg.Result...), msg.Error, nil
-		}
-		if msg.ID == nil {
-			continue
-		}
-		return nil, nil, fmt.Errorf("unexpected message while waiting for response to %s", string(id))
+	result := <-resultCh
+	if result.err != nil {
+		return nil, nil, result.err
 	}
+	return append(json.RawMessage(nil), result.result...), result.rpcErr, nil
 }
 
 func WithMethod(method string, handler MethodHandler) Option {
@@ -131,18 +127,41 @@ func (s *Server) Serve(input io.Reader, output io.Writer) error {
 	scanner := bufio.NewScanner(input)
 	scanner.Buffer(make([]byte, 0, 64*1024), maxMessageBytes)
 	conn := &connection{
-		scanner: scanner,
-		encoder: json.NewEncoder(output),
+		scanner:   scanner,
+		encoder:   json.NewEncoder(output),
+		pending:   map[string]chan clientResponse{},
+		responses: map[string]clientResponse{},
 	}
+	handlerErr := make(chan error, 1)
+	sendHandlerErr := func(err error) {
+		if err == nil {
+			return
+		}
+		select {
+		case handlerErr <- err:
+		default:
+		}
+	}
+	methods := make(chan request, 128)
+	methodsDone := make(chan struct{})
+	go func() {
+		defer close(methodsDone)
+		for req := range methods {
+			ctx := &MethodContext{conn: conn}
+			sendHandlerErr(conn.write(s.handle(ctx, req)))
+		}
+	}()
 
 	for {
-		req, ok, err := conn.readMessage()
+		msg, ok, err := conn.readMessage()
 		if err != nil {
 			var parseErr parseMessageError
 			if !errors.As(err, &parseErr) {
+				conn.finishRequests(err)
 				return err
 			}
-			if err := conn.encoder.Encode(errorResponse(nil, -32700, "parse error", parseErr.Err.Error())); err != nil {
+			if err := conn.write(errorResponse(nil, -32700, "parse error", parseErr.Err.Error())); err != nil {
+				conn.finishRequests(err)
 				return err
 			}
 			continue
@@ -150,28 +169,43 @@ func (s *Server) Serve(input io.Reader, output io.Writer) error {
 		if !ok {
 			break
 		}
-		if req.Method == "" {
+		if msg.ID != nil && msg.Method == "" {
+			conn.deliverResponse(msg)
 			continue
 		}
-		if req.ID == nil {
-			if handler := s.notifications[req.Method]; handler != nil {
-				if err := handler(req.Params); err != nil {
+		if msg.Method == "" {
+			continue
+		}
+		if msg.ID == nil {
+			if handler := s.notifications[msg.Method]; handler != nil {
+				if err := handler(msg.Params); err != nil {
+					conn.finishRequests(err)
 					return err
 				}
 			}
 			continue
 		}
-		ctx := &MethodContext{encoder: conn.encoder, conn: conn}
-		if err := conn.encoder.Encode(s.handle(ctx, request{
-			JSONRPC: req.JSONRPC,
-			ID:      req.ID,
-			Method:  req.Method,
-			Params:  req.Params,
-		})); err != nil {
-			return err
+		req := request{
+			JSONRPC: msg.JSONRPC,
+			ID:      msg.ID,
+			Method:  msg.Method,
+			Params:  msg.Params,
 		}
+		methods <- req
 	}
-	return scanner.Err()
+	close(methods)
+	conn.finishRequests(io.EOF)
+	select {
+	case err := <-handlerErr:
+		return err
+	case <-methodsDone:
+	}
+	select {
+	case err := <-handlerErr:
+		return err
+	default:
+		return scanner.Err()
+	}
 }
 
 func (s *Server) handle(ctx *MethodContext, req request) response {
@@ -312,9 +346,21 @@ type agentInfo struct {
 type authMethod struct{}
 
 type connection struct {
-	scanner *bufio.Scanner
-	encoder *json.Encoder
-	nextID  int64
+	scanner   *bufio.Scanner
+	encoder   *json.Encoder
+	writeMu   sync.Mutex
+	requestMu sync.Mutex
+	nextID    int64
+	pending   map[string]chan clientResponse
+	responses map[string]clientResponse
+	closed    bool
+	closeErr  error
+}
+
+type clientResponse struct {
+	result json.RawMessage
+	rpcErr *RPCError
+	err    error
 }
 
 func (c *connection) readMessage() (message, bool, error) {
@@ -335,13 +381,83 @@ func (c *connection) readMessage() (message, bool, error) {
 	return message{}, false, nil
 }
 
-func (c *connection) nextRequestID() json.RawMessage {
+func (c *connection) write(value any) error {
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
+	return c.encoder.Encode(value)
+}
+
+func (c *connection) registerRequest() (json.RawMessage, <-chan clientResponse, error) {
+	c.requestMu.Lock()
+	defer c.requestMu.Unlock()
 	c.nextID++
 	raw, err := json.Marshal(fmt.Sprintf("server-%d", c.nextID))
 	if err != nil {
 		panic(err)
 	}
-	return raw
+	key := string(raw)
+	resultCh := make(chan clientResponse, 1)
+	if response, ok := c.responses[key]; ok {
+		delete(c.responses, key)
+		resultCh <- response
+		return raw, resultCh, nil
+	}
+	if c.closed {
+		if c.closeErr != nil {
+			return nil, nil, c.closeErr
+		}
+		return nil, nil, io.EOF
+	}
+	c.pending[key] = resultCh
+	return raw, resultCh, nil
+}
+
+func (c *connection) removeRequest(id json.RawMessage) {
+	c.requestMu.Lock()
+	defer c.requestMu.Unlock()
+	delete(c.pending, string(id))
+}
+
+func (c *connection) deliverResponse(msg message) {
+	if msg.ID == nil {
+		return
+	}
+	response := clientResponse{
+		result: append(json.RawMessage(nil), msg.Result...),
+		rpcErr: msg.Error,
+	}
+	key := string(*msg.ID)
+	c.requestMu.Lock()
+	resultCh := c.pending[key]
+	if resultCh != nil {
+		delete(c.pending, key)
+	}
+	if resultCh == nil {
+		c.responses[key] = response
+	}
+	c.requestMu.Unlock()
+	if resultCh != nil {
+		resultCh <- response
+	}
+}
+
+func (c *connection) finishRequests(err error) {
+	if err == nil {
+		err = io.EOF
+	}
+	c.requestMu.Lock()
+	if c.closed {
+		c.requestMu.Unlock()
+		return
+	}
+	c.closed = true
+	c.closeErr = err
+	pending := c.pending
+	c.pending = map[string]chan clientResponse{}
+	c.requestMu.Unlock()
+	for _, resultCh := range pending {
+		resultCh <- clientResponse{err: err}
+	}
 }
 
 type parseMessageError struct {

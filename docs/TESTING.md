@@ -16,6 +16,8 @@ runtime bridge.
 - request ID preservation
 - server-to-client JSON-RPC requests from handlers, including successful
   client responses and client RPC errors
+- in-flight client notification dispatch while a request handler is running,
+  including prompt cancellation through the runtime bridge
 - malformed JSON errors without stopping later requests
 - invalid JSON-RPC version errors
 - notification dispatch without responses
@@ -89,7 +91,7 @@ adapter to this one:
 - Claude-specific session fork behavior, if exposed by the chosen runtime
   boundary
 - prompt streaming with assistant chunks and terminal prompt results
-- real normal cancellation, wedged-runtime forced cancellation, and no
+- real vendor-runtime normal cancellation, wedged-runtime forced cancellation, and no
   double-settle behavior
 - auth methods and terminal auth behavior in local/remote environments
 - gateway auth metadata

@@ -3,6 +3,7 @@ package runtimebridge_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"sync"
 	"testing"
@@ -221,6 +222,30 @@ func TestPromptForwardsRuntimeChildRequestAndReturnsClientResponse(t *testing.T)
 	}
 	if !strings.Contains(string(response.result), "approved") {
 		t.Fatalf("runtime response result = %s, want approved", response.result)
+	}
+}
+
+func TestPromptCanBeCancelledByClientNotification(t *testing.T) {
+	runtime := newFakeRuntimeClient()
+	runtime.blockPromptUntilCancel = true
+	client := newBridgeClient(t, runtime)
+
+	envelopes := client.SendRaw(strings.Join([]string{
+		`{"jsonrpc":"2.0","id":"prompt-1","method":"session/prompt","params":{"sessionId":"sess-bridge","prompt":[{"type":"text","text":"keep going"}]}}`,
+		`{"jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":"sess-bridge"}}`,
+	}, "\n") + "\n")
+	if len(envelopes) != 1 {
+		t.Fatalf("got %d envelopes, want cancelled prompt response", len(envelopes))
+	}
+	var result struct {
+		StopReason string `json:"stopReason"`
+	}
+	envelopes[0].ResultInto(t, &result)
+	if result.StopReason != "cancelled" {
+		t.Fatalf("stopReason = %q, want cancelled", result.StopReason)
+	}
+	if runtime.notified("session/cancel") != 1 {
+		t.Fatalf("session/cancel notifications = %d, want 1", runtime.notified("session/cancel"))
 	}
 }
 
@@ -462,17 +487,19 @@ func newBridgeClient(t testing.TB, runtime *fakeRuntimeClient) *acptest.Client {
 }
 
 type fakeRuntimeClient struct {
-	mu                sync.Mutex
-	calls             map[string]int
-	notifications     map[string]int
-	events            chan runtimejsonrpc.Event
-	err               error
-	childRequest      bool
-	newSessionUpdates []json.RawMessage
-	promptUpdates     []json.RawMessage
-	closeUpdates      []json.RawMessage
-	responses         chan runtimeChildResponse
-	lastResponse      *runtimeChildResponse
+	mu                     sync.Mutex
+	calls                  map[string]int
+	notifications          map[string]int
+	events                 chan runtimejsonrpc.Event
+	err                    error
+	childRequest           bool
+	blockPromptUntilCancel bool
+	cancelled              chan struct{}
+	newSessionUpdates      []json.RawMessage
+	promptUpdates          []json.RawMessage
+	closeUpdates           []json.RawMessage
+	responses              chan runtimeChildResponse
+	lastResponse           *runtimeChildResponse
 }
 
 func newFakeRuntimeClient() *fakeRuntimeClient {
@@ -480,6 +507,7 @@ func newFakeRuntimeClient() *fakeRuntimeClient {
 		calls:         map[string]int{},
 		notifications: map[string]int{},
 		events:        make(chan runtimejsonrpc.Event, 8),
+		cancelled:     make(chan struct{}),
 		responses:     make(chan runtimeChildResponse, 8),
 	}
 }
@@ -502,6 +530,14 @@ func (f *fakeRuntimeClient) Request(_ctx context.Context, method string, params 
 		}
 		return json.RawMessage(`{"sessionId":"sess-bridge","configOptions":[{"id":"model","name":"Model","type":"select","currentValue":"fast","options":[{"value":"fast","name":"Fast"}]}],"modes":{"currentModeId":"ask"}}`), nil
 	case "session/prompt":
+		if f.blockPromptUntilCancel {
+			select {
+			case <-f.cancelled:
+				return json.RawMessage(`{"stopReason":"cancelled"}`), nil
+			case <-time.After(2 * time.Second):
+				return nil, errors.New("timed out waiting for cancel notification")
+			}
+		}
 		if f.childRequest {
 			f.events <- runtimejsonrpc.Event{
 				ID:     json.RawMessage(`"runtime-child-1"`),
@@ -565,6 +601,13 @@ func (f *fakeRuntimeClient) Notify(_ctx context.Context, method string, _params 
 		return f.err
 	}
 	f.notifications[method]++
+	if method == "session/cancel" {
+		select {
+		case <-f.cancelled:
+		default:
+			close(f.cancelled)
+		}
+	}
 	return nil
 }
 
