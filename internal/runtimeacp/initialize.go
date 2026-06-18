@@ -49,6 +49,8 @@ type InitializeResult struct {
 	AgentCapabilities AgentCapabilities  `json:"agentCapabilities,omitempty"`
 	AgentInfo         ImplementationInfo `json:"agentInfo,omitempty"`
 	AuthMethods       []json.RawMessage  `json:"authMethods,omitempty"`
+
+	raw json.RawMessage
 }
 
 type AgentCapabilities struct {
@@ -89,7 +91,16 @@ func Initialize(ctx context.Context, client JSONRPCClient, params InitializePara
 	if result.ProtocolVersion != params.ProtocolVersion {
 		return InitializeResult{}, fmt.Errorf("%w: requested %d got %d", ErrUnsupportedProtocolVersion, params.ProtocolVersion, result.ProtocolVersion)
 	}
+	result.raw = append(json.RawMessage(nil), resultData...)
 	return result, nil
+}
+
+func (r InitializeResult) MarshalJSON() ([]byte, error) {
+	if len(r.raw) != 0 {
+		return append([]byte(nil), r.raw...), nil
+	}
+	type alias InitializeResult
+	return json.Marshal(alias(r))
 }
 
 func NewRuntimeJSONRPCClient(client *runtimejsonrpc.Client) JSONRPCClient {

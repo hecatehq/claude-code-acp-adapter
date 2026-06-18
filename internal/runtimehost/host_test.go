@@ -24,6 +24,13 @@ func TestStartInitializesRuntimeAndProxiesSessionMethods(t *testing.T) {
 	if !host.InitializeResult().AgentCapabilities.PromptCapabilities.Image {
 		t.Fatal("image prompt capability = false, want true")
 	}
+	rawInitialize, err := json.Marshal(host.InitializeResult())
+	if err != nil {
+		t.Fatalf("marshal initialize result: %v", err)
+	}
+	if !strings.Contains(string(rawInitialize), `"x-runtime":{"kept":true}`) {
+		t.Fatalf("initialize result = %s, want x-runtime preserved", rawInitialize)
+	}
 
 	client := acptest.NewClient(t, acp.NewServer(acp.AdapterInfo{Name: "test-adapter"}, host.Options()...))
 	newSession := client.Request("session/new", map[string]any{"cwd": "/tmp/project"})
@@ -239,6 +246,7 @@ func writeInitializeResponse(encoder *json.Encoder, id json.RawMessage, params j
 			"agentCapabilities": map[string]any{
 				"promptCapabilities": map[string]any{"image": true},
 			},
+			"x-runtime": map[string]any{"kept": true},
 		},
 	})
 }
