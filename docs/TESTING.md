@@ -62,7 +62,8 @@ runtime bridge.
 - `session/new` result preservation for runtime-provided `configOptions` and
   legacy `modes`, so model/reasoning/mode selectors survive the bridge
 - runtime ACP config/mode setters: `session/set_config_option` and
-  `session/set_mode` raw result forwarding
+  `session/set_mode` raw result forwarding, including session updates emitted
+  before setter responses
 - ACP session load/resume/fork/list/delete protocol calls, including replay
   updates, raw resume/fork result preservation, listed session metadata, cursor
   parsing, and delete request forwarding
