@@ -23,6 +23,8 @@ runtime bridge.
 - hardened process runner behavior: fixed argv, shell rejection, absolute cwd
   enforcement, env allowlists, redaction, output caps, missing-binary errors,
   non-zero exits, and context cancellation
+- `doctor` runtime-boundary probe success, missing-binary, shell rejection,
+  failed version-probe, secret redaction, and invalid-workdir behavior
 
 ## Not Covered Yet
 
@@ -54,3 +56,7 @@ other ACP hosts will use.
 
 Use `internal/process` for every subprocess boundary. Its tests pin the
 security contract before real Claude Code integration lands.
+
+Use `internal/doctor` for local runtime readiness checks. Its tests use the Go
+test binary as a fake Claude Code executable so command probing stays
+deterministic and does not require a real Claude Code install.

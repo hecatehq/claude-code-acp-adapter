@@ -1,10 +1,14 @@
 package app
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/hecatehq/claude-code-acp-adapter/internal/acp"
+	"github.com/hecatehq/claude-code-acp-adapter/internal/doctor"
 	"github.com/spf13/cobra"
 )
 
@@ -66,6 +70,117 @@ func newRootCommand(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.
 			_, _ = fmt.Fprintf(stdout, "%s %s\n", Name, Version)
 		},
 	})
+	cmd.AddCommand(newDoctorCommand(stdout))
 	cmd.SetVersionTemplate(fmt.Sprintf("%s %s\n", Name, Version))
 	return cmd
+}
+
+func newDoctorCommand(stdout io.Writer) *cobra.Command {
+	var binary string
+	var workDir string
+	var jsonOutput bool
+	var versionArgs []string
+
+	cmd := &cobra.Command{
+		Use:           "doctor",
+		Short:         "Check the local Claude Code runtime boundary",
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		Args:          cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			report, err := doctor.Run(context.Background(), doctor.Spec{
+				AdapterName: Name,
+				Binary:      binary,
+				VersionArgs: versionArgs,
+				WorkDir:     workDir,
+				InheritEnv: []string{
+					"PATH",
+					"HOME",
+					"XDG_CONFIG_HOME",
+					"TMPDIR",
+				},
+				EnvVars: []doctor.EnvVar{
+					{Name: "ANTHROPIC_API_KEY"},
+					{Name: "ANTHROPIC_BASE_URL"},
+					{Name: "CLAUDE_CONFIG_DIR"},
+				},
+			})
+			if jsonOutput {
+				payload := struct {
+					OK     bool          `json:"ok"`
+					Error  string        `json:"error,omitempty"`
+					Report doctor.Report `json:"report"`
+				}{
+					OK:     err == nil,
+					Report: report,
+				}
+				if err != nil {
+					payload.Error = err.Error()
+				}
+				encoder := json.NewEncoder(stdout)
+				encoder.SetIndent("", "  ")
+				if encodeErr := encoder.Encode(payload); encodeErr != nil {
+					return encodeErr
+				}
+			} else {
+				writeDoctorReport(stdout, report, err)
+			}
+			if err != nil {
+				return err
+			}
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&binary, "binary", "claude", "Claude Code executable to probe")
+	cmd.Flags().StringVar(&workDir, "workdir", "", "working directory for the probe (defaults to current directory)")
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "write a JSON report")
+	cmd.Flags().StringArrayVar(&versionArgs, "version-arg", []string{"--version"}, "argument for the version probe; repeat to pass multiple arguments")
+	return cmd
+}
+
+func writeDoctorReport(w io.Writer, report doctor.Report, runErr error) {
+	status := "ok"
+	if runErr != nil {
+		status = "failed"
+	}
+	_, _ = fmt.Fprintf(w, "%s doctor: %s\n", report.AdapterName, status)
+	_, _ = fmt.Fprintf(w, "binary: %s\n", report.Binary)
+	if report.ResolvedCommand != "" {
+		_, _ = fmt.Fprintf(w, "resolved: %s\n", report.ResolvedCommand)
+	}
+	if report.WorkDir != "" {
+		_, _ = fmt.Fprintf(w, "workdir: %s\n", report.WorkDir)
+	}
+	if len(report.VersionArgs) != 0 {
+		_, _ = fmt.Fprintf(w, "version args: %s\n", strings.Join(report.VersionArgs, " "))
+	}
+	for _, status := range report.Environment {
+		state := "missing"
+		if status.Present {
+			state = "present"
+		}
+		suffix := ""
+		if status.Sensitive {
+			suffix = " (redacted)"
+		}
+		if status.Required {
+			suffix += " (required)"
+		}
+		_, _ = fmt.Fprintf(w, "env %s: %s%s\n", status.Name, state, suffix)
+	}
+	writeProbeOutput(w, "stdout", report.VersionStdout, report.StdoutTruncated)
+	writeProbeOutput(w, "stderr", report.VersionStderr, report.StderrTruncated)
+}
+
+func writeProbeOutput(w io.Writer, label string, output string, truncated bool) {
+	if output == "" && !truncated {
+		return
+	}
+	output = strings.TrimRight(output, "\n")
+	if output != "" {
+		_, _ = fmt.Fprintf(w, "%s: %s\n", label, output)
+	}
+	if truncated {
+		_, _ = fmt.Fprintf(w, "%s: [truncated]\n", label)
+	}
 }

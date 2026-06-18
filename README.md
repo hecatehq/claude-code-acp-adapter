@@ -26,6 +26,7 @@ Implemented:
 - structured errors for unimplemented methods
 - source-review notes for the current npm/TypeScript adapter stack
 - unit tests for the protocol scaffold
+- `doctor` command for probing the local Claude Code binary boundary
 
 Not implemented yet:
 
@@ -44,6 +45,7 @@ go test ./...
 go test -race ./...
 go vet ./...
 go run ./cmd/claude-code-acp-adapter --version
+go run ./cmd/claude-code-acp-adapter doctor
 ```
 
 See [docs/TESTING.md](docs/TESTING.md) for what is covered today and what must
@@ -54,6 +56,12 @@ be covered before this adapter can replace the current Claude Agent ACP bridge.
 The binary uses Cobra for human commands, but the root command with no arguments
 is reserved for ACP stdio. Do not add default logging, banners, usage output, or
 prompts to the no-argument path; stdout is the protocol stream.
+
+Use `doctor` before wiring this adapter into an ACP host. It resolves the Claude
+Code binary, runs a fixed-argv version probe through the hardened process
+runner, and reports selected environment variable presence without printing
+secret values. Use `--binary` to point at a non-default Claude executable and
+`--json` for machine-readable output.
 
 ## Source Review
 

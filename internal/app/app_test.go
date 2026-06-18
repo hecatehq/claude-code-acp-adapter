@@ -64,3 +64,23 @@ func TestUnknownArgDoesNotPrintUsage(t *testing.T) {
 		t.Fatalf("stderr = %q, want unknown command", got)
 	}
 }
+
+func TestDoctorCommandReportsFailureWithoutUsage(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := Run([]string{"doctor", "--binary", "/definitely/missing/claude"}, nil, &stdout, &stderr)
+
+	if code != 1 {
+		t.Fatalf("Run returned %d, want 1", code)
+	}
+	if got := stdout.String(); !strings.Contains(got, "claude-code-acp-adapter doctor: failed") {
+		t.Fatalf("stdout = %q, want doctor failure report", got)
+	}
+	if got := stderr.String(); !strings.Contains(got, "find runtime binary") {
+		t.Fatalf("stderr = %q, want runtime binary error", got)
+	}
+	if strings.Contains(stderr.String(), "Usage:") {
+		t.Fatalf("stderr = %q, want no usage", stderr.String())
+	}
+}

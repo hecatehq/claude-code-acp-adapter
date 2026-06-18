@@ -24,6 +24,8 @@
 ## Phase 3: Claude Code Runtime Bridge
 
 - use `internal/process` for every subprocess boundary
+- keep `doctor` green against the target Claude Code binary before enabling
+  real runtime sessions
 - choose a stable Claude Code / Claude Agent SDK integration boundary
 - implement auth/session/prompt/cancel/config/mcp/tool/elicitation mappings
 - port the edge cases recorded in `SOURCE_REVIEW.md`
