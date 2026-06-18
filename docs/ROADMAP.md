@@ -19,6 +19,7 @@
   elicitations, cancellation, orphan results, settings, model options, and
   terminal output
 - tests proving ACP output shape before any real Claude Code process is used
+- session lifecycle coverage for create, prompt, cancel, and close
 
 ## Phase 3: Claude Code Runtime Bridge
 

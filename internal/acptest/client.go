@@ -18,6 +18,8 @@ type Client struct {
 type Response struct {
 	JSONRPC string          `json:"jsonrpc"`
 	ID      json.RawMessage `json:"id"`
+	Method  string          `json:"method,omitempty"`
+	Params  json.RawMessage `json:"params,omitempty"`
 	Result  json.RawMessage `json:"result,omitempty"`
 	Error   *acp.RPCError   `json:"error,omitempty"`
 }
@@ -96,6 +98,19 @@ func (r Response) ResultInto(t testing.TB, target any) {
 	}
 	if err := json.Unmarshal(r.Result, target); err != nil {
 		t.Fatalf("decode result: %v\n%s", err, string(r.Result))
+	}
+}
+
+func (r Response) ParamsInto(t testing.TB, target any) {
+	t.Helper()
+	if r.Method == "" {
+		t.Fatalf("response is not a notification: %#v", r)
+	}
+	if len(r.Params) == 0 {
+		t.Fatal("notification has no params")
+	}
+	if err := json.Unmarshal(r.Params, target); err != nil {
+		t.Fatalf("decode params: %v\n%s", err, string(r.Params))
 	}
 }
 

@@ -32,9 +32,21 @@ type Server struct {
 
 type Option func(*Server)
 
-type MethodHandler func(params json.RawMessage) (any, *RPCError)
+type MethodHandler func(ctx *MethodContext, params json.RawMessage) (any, *RPCError)
 
 type NotificationHandler func(params json.RawMessage) error
+
+type MethodContext struct {
+	encoder *json.Encoder
+}
+
+func (c *MethodContext) Notify(method string, params any) error {
+	return c.encoder.Encode(serverNotification{
+		JSONRPC: "2.0",
+		Method:  method,
+		Params:  params,
+	})
+}
 
 func WithMethod(method string, handler MethodHandler) Option {
 	return func(s *Server) {
@@ -93,14 +105,15 @@ func (s *Server) Serve(input io.Reader, output io.Writer) error {
 			}
 			continue
 		}
-		if err := encoder.Encode(s.handle(req)); err != nil {
+		ctx := &MethodContext{encoder: encoder}
+		if err := encoder.Encode(s.handle(ctx, req)); err != nil {
 			return err
 		}
 	}
 	return scanner.Err()
 }
 
-func (s *Server) handle(req request) response {
+func (s *Server) handle(ctx *MethodContext, req request) response {
 	if req.JSONRPC != "" && req.JSONRPC != "2.0" {
 		return errorResponse(req.ID, -32600, "invalid request", "jsonrpc must be 2.0")
 	}
@@ -128,7 +141,7 @@ func (s *Server) handle(req request) response {
 		})
 	case "session/new", "session/load", "session/resume", "session/list", "session/prompt", "session/cancel", "session/close":
 		if handler := s.methods[req.Method]; handler != nil {
-			result, rpcErr := handler(req.Params)
+			result, rpcErr := handler(ctx, req.Params)
 			if rpcErr != nil {
 				return response{JSONRPC: "2.0", ID: req.ID, Error: rpcErr}
 			}
@@ -137,7 +150,7 @@ func (s *Server) handle(req request) response {
 		return errorResponse(req.ID, -32004, "not implemented", fmt.Sprintf("%s is not implemented in this scaffold", req.Method))
 	default:
 		if handler := s.methods[req.Method]; handler != nil {
-			result, rpcErr := handler(req.Params)
+			result, rpcErr := handler(ctx, req.Params)
 			if rpcErr != nil {
 				return response{JSONRPC: "2.0", ID: req.ID, Error: rpcErr}
 			}
@@ -152,6 +165,12 @@ type request struct {
 	ID      *json.RawMessage `json:"id,omitempty"`
 	Method  string           `json:"method"`
 	Params  json.RawMessage  `json:"params,omitempty"`
+}
+
+type serverNotification struct {
+	JSONRPC string `json:"jsonrpc"`
+	Method  string `json:"method"`
+	Params  any    `json:"params,omitempty"`
 }
 
 type response struct {

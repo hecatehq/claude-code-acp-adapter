@@ -100,7 +100,7 @@ func TestConformanceFakeRuntimeMethodDispatch(t *testing.T) {
 }
 
 func TestConformanceRuntimeErrorPropagates(t *testing.T) {
-	server := acp.NewServer(acp.AdapterInfo{Name: "test"}, acp.WithMethod("session/prompt", func(json.RawMessage) (any, *acp.RPCError) {
+	server := acp.NewServer(acp.AdapterInfo{Name: "test"}, acp.WithMethod("session/prompt", func(*acp.MethodContext, json.RawMessage) (any, *acp.RPCError) {
 		return nil, &acp.RPCError{Code: -32042, Message: "runtime failed", Data: "boom"}
 	}))
 	client := acptest.NewClient(t, server)
@@ -136,7 +136,7 @@ type fakeRuntime struct {
 	promptText string
 }
 
-func (f *fakeRuntime) newSession(params json.RawMessage) (any, *acp.RPCError) {
+func (f *fakeRuntime) newSession(_ *acp.MethodContext, params json.RawMessage) (any, *acp.RPCError) {
 	var req struct {
 		CWD string `json:"cwd"`
 	}
@@ -146,7 +146,7 @@ func (f *fakeRuntime) newSession(params json.RawMessage) (any, *acp.RPCError) {
 	return map[string]string{"sessionId": "fake-session", "cwd": req.CWD}, nil
 }
 
-func (f *fakeRuntime) prompt(params json.RawMessage) (any, *acp.RPCError) {
+func (f *fakeRuntime) prompt(_ *acp.MethodContext, params json.RawMessage) (any, *acp.RPCError) {
 	var req struct {
 		Prompt []struct {
 			Type string `json:"type"`
