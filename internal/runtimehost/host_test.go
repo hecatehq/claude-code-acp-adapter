@@ -80,6 +80,7 @@ func TestStartRejectsUnsupportedProtocolVersion(t *testing.T) {
 		},
 		ClientCapabilities: runtimeacp.ClientCapabilities{
 			Terminal: true,
+			Auth:     &runtimeacp.AuthCapabilities{Terminal: true},
 			FS: runtimeacp.FileSystemCapabilities{
 				ReadTextFile:  true,
 				WriteTextFile: true,
@@ -112,6 +113,7 @@ func newHelperHost(t testing.TB, mode string) *runtimehost.Host {
 		},
 		ClientCapabilities: runtimeacp.ClientCapabilities{
 			Terminal: true,
+			Auth:     &runtimeacp.AuthCapabilities{Terminal: true},
 			FS: runtimeacp.FileSystemCapabilities{
 				ReadTextFile:  true,
 				WriteTextFile: true,
@@ -212,6 +214,8 @@ func writeInitializeResponse(encoder *json.Encoder, id json.RawMessage, params j
 		req.ClientInfo.Name != "test-adapter" ||
 		req.ClientInfo.Title != "Test Adapter" ||
 		req.ClientInfo.Version != "test-version" ||
+		req.ClientCapabilities.Auth == nil ||
+		!req.ClientCapabilities.Auth.Terminal ||
 		!req.ClientCapabilities.Terminal ||
 		!req.ClientCapabilities.FS.ReadTextFile ||
 		!req.ClientCapabilities.FS.WriteTextFile {

@@ -24,8 +24,13 @@ type InitializeParams struct {
 }
 
 type ClientCapabilities struct {
+	Auth     *AuthCapabilities      `json:"auth,omitempty"`
 	FS       FileSystemCapabilities `json:"fs,omitempty"`
 	Terminal bool                   `json:"terminal,omitempty"`
+}
+
+type AuthCapabilities struct {
+	Terminal bool `json:"terminal,omitempty"`
 }
 
 type FileSystemCapabilities struct {

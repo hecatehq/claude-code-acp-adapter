@@ -82,6 +82,7 @@ func testClientInfo() runtimeacp.ImplementationInfo {
 func testClientCapabilities() runtimeacp.ClientCapabilities {
 	return runtimeacp.ClientCapabilities{
 		Terminal: true,
+		Auth:     &runtimeacp.AuthCapabilities{Terminal: true},
 		FS: runtimeacp.FileSystemCapabilities{
 			ReadTextFile:  true,
 			WriteTextFile: true,
@@ -140,6 +141,9 @@ func TestRuntimeACPInitializeHelper(t *testing.T) {
 				Version string `json:"version"`
 			} `json:"clientInfo"`
 			ClientCapabilities struct {
+				Auth struct {
+					Terminal bool `json:"terminal"`
+				} `json:"auth"`
 				Terminal bool `json:"terminal"`
 				FS       struct {
 					ReadTextFile  bool `json:"readTextFile"`
@@ -154,6 +158,7 @@ func TestRuntimeACPInitializeHelper(t *testing.T) {
 	if req.Method != "initialize" ||
 		req.Params.ProtocolVersion != 1 ||
 		req.Params.ClientInfo.Name != "hecate-test" ||
+		!req.Params.ClientCapabilities.Auth.Terminal ||
 		!req.Params.ClientCapabilities.Terminal ||
 		!req.Params.ClientCapabilities.FS.ReadTextFile ||
 		!req.Params.ClientCapabilities.FS.WriteTextFile {
