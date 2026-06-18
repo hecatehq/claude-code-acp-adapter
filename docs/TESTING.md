@@ -20,6 +20,9 @@ runtime bridge.
 - session close and post-close not-found behavior
 - scaffold `session/prompt` not-implemented errors
 - 1 MiB inbound message cap
+- hardened process runner behavior: fixed argv, shell rejection, absolute cwd
+  enforcement, env allowlists, redaction, output caps, missing-binary errors,
+  non-zero exits, and context cancellation
 
 ## Not Covered Yet
 
@@ -41,7 +44,6 @@ adapter to this one:
 - orphan result skipping after cancelled queued prompts
 - query-closed errors for prompts/cancels after stream termination
 - local slash-command metadata stripping
-- environment allowlisting and process hardening
 - deterministic release binaries
 
 ## Test Strategy
@@ -49,3 +51,6 @@ adapter to this one:
 Use `internal/acptest` for all protocol-level tests. It drives the real stdio
 JSON-RPC path, so fake runtime tests exercise the same transport Hecate and
 other ACP hosts will use.
+
+Use `internal/process` for every subprocess boundary. Its tests pin the
+security contract before real Claude Code integration lands.
