@@ -61,6 +61,8 @@ runtime bridge.
   requests, and runtime RPC error mapping
 - ACP server-to-runtime bridge coverage for session load, resume, list, and
   delete methods
+- ACP bridge forwarding for dynamic `session/update` payloads such as
+  `available_commands_update` and `config_option_update`
 - ACP bridge forwarding for runtime child requests that require client
   responses, including returning the client result to the child runtime
 - ACP bridge forwarding for `authenticate` and `logout`

@@ -66,6 +66,76 @@ func TestPromptForwardsRuntimeUpdatesBeforeResponse(t *testing.T) {
 	}
 }
 
+func TestPromptForwardsDynamicSessionUpdates(t *testing.T) {
+	runtime := newFakeRuntimeClient()
+	runtime.events = make(chan runtimejsonrpc.Event)
+	runtime.promptUpdates = []json.RawMessage{
+		json.RawMessage(`{"sessionId":"sess-bridge","update":{"sessionUpdate":"available_commands_update","availableCommands":[{"name":"web","description":"Search the web","input":{"hint":"query"}}]}}`),
+		json.RawMessage(`{"sessionId":"sess-bridge","update":{"sessionUpdate":"config_option_update","configOptions":[{"id":"model","name":"Model","type":"select","currentValue":"smart","options":[{"value":"smart","name":"Smart"}]}]}}`),
+	}
+	client := newBridgeClient(t, runtime)
+
+	envelopes := client.Send(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "prompt-1",
+		"method":  "session/prompt",
+		"params": map[string]any{
+			"sessionId": "sess-bridge",
+			"prompt":    []map[string]string{{"type": "text", "text": "hello"}},
+		},
+	})
+	if len(envelopes) != 3 {
+		t.Fatalf("got %d envelopes, want command update + config update + response", len(envelopes))
+	}
+	var commands struct {
+		SessionID string `json:"sessionId"`
+		Update    struct {
+			SessionUpdate     string `json:"sessionUpdate"`
+			AvailableCommands []struct {
+				Name        string `json:"name"`
+				Description string `json:"description"`
+				Input       struct {
+					Hint string `json:"hint"`
+				} `json:"input"`
+			} `json:"availableCommands"`
+		} `json:"update"`
+	}
+	envelopes[0].ParamsInto(t, &commands)
+	if commands.SessionID != "sess-bridge" ||
+		commands.Update.SessionUpdate != "available_commands_update" ||
+		len(commands.Update.AvailableCommands) != 1 ||
+		commands.Update.AvailableCommands[0].Name != "web" ||
+		commands.Update.AvailableCommands[0].Input.Hint != "query" {
+		t.Fatalf("available commands update = %#v", commands)
+	}
+
+	var config struct {
+		SessionID string `json:"sessionId"`
+		Update    struct {
+			SessionUpdate string `json:"sessionUpdate"`
+			ConfigOptions []struct {
+				ID           string `json:"id"`
+				CurrentValue string `json:"currentValue"`
+			} `json:"configOptions"`
+		} `json:"update"`
+	}
+	envelopes[1].ParamsInto(t, &config)
+	if config.SessionID != "sess-bridge" ||
+		config.Update.SessionUpdate != "config_option_update" ||
+		len(config.Update.ConfigOptions) != 1 ||
+		config.Update.ConfigOptions[0].ID != "model" ||
+		config.Update.ConfigOptions[0].CurrentValue != "smart" {
+		t.Fatalf("config update = %#v", config)
+	}
+	var result struct {
+		StopReason string `json:"stopReason"`
+	}
+	envelopes[2].ResultInto(t, &result)
+	if result.StopReason != "end_turn" {
+		t.Fatalf("stopReason = %q, want end_turn", result.StopReason)
+	}
+}
+
 func TestPromptForwardsRuntimeChildRequestAndReturnsClientResponse(t *testing.T) {
 	runtime := newFakeRuntimeClient()
 	runtime.childRequest = true
@@ -299,6 +369,7 @@ type fakeRuntimeClient struct {
 	events        chan runtimejsonrpc.Event
 	err           error
 	childRequest  bool
+	promptUpdates []json.RawMessage
 	responses     chan runtimeChildResponse
 	lastResponse  *runtimeChildResponse
 }
@@ -331,6 +402,15 @@ func (f *fakeRuntimeClient) Request(_ctx context.Context, method string, params 
 				Params: json.RawMessage(`{"sessionId":"sess-bridge","toolCallId":"tool-1"}`),
 			}
 			<-f.responses
+			return json.RawMessage(`{"stopReason":"end_turn"}`), nil
+		}
+		if len(f.promptUpdates) != 0 {
+			for _, params := range f.promptUpdates {
+				f.events <- runtimejsonrpc.Event{
+					Method: "session/update",
+					Params: append(json.RawMessage(nil), params...),
+				}
+			}
 			return json.RawMessage(`{"stopReason":"end_turn"}`), nil
 		}
 		f.events <- runtimejsonrpc.Event{
