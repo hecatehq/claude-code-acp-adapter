@@ -21,6 +21,39 @@ type NewSessionResult struct {
 	SessionID string `json:"sessionId"`
 }
 
+type LoadSessionParams struct {
+	SessionID             string      `json:"sessionId"`
+	CWD                   string      `json:"cwd"`
+	MCPServers            []MCPServer `json:"mcpServers,omitempty"`
+	AdditionalDirectories []string    `json:"additionalDirectories,omitempty"`
+}
+
+type ResumeSessionParams struct {
+	SessionID             string      `json:"sessionId"`
+	CWD                   string      `json:"cwd"`
+	MCPServers            []MCPServer `json:"mcpServers,omitempty"`
+	AdditionalDirectories []string    `json:"additionalDirectories,omitempty"`
+}
+
+type ListSessionsParams struct {
+	CWD    string `json:"cwd,omitempty"`
+	Cursor string `json:"cursor,omitempty"`
+}
+
+type ListSessionsResult struct {
+	Sessions   []SessionInfo `json:"sessions"`
+	NextCursor string        `json:"nextCursor,omitempty"`
+}
+
+type SessionInfo struct {
+	SessionID             string          `json:"sessionId"`
+	CWD                   string          `json:"cwd"`
+	AdditionalDirectories []string        `json:"additionalDirectories,omitempty"`
+	Title                 string          `json:"title,omitempty"`
+	UpdatedAt             string          `json:"updatedAt,omitempty"`
+	Meta                  json.RawMessage `json:"_meta,omitempty"`
+}
+
 type MCPServer struct {
 	Type    string        `json:"type,omitempty"`
 	Name    string        `json:"name"`
@@ -85,6 +118,10 @@ type CloseSessionParams struct {
 	SessionID string `json:"sessionId"`
 }
 
+type DeleteSessionParams struct {
+	SessionID string `json:"sessionId"`
+}
+
 func NewSession(ctx context.Context, client JSONRPCClient, params NewSessionParams) (NewSessionResult, error) {
 	var result NewSessionResult
 	if err := requestInto(ctx, client, "session/new", params, &result); err != nil {
@@ -107,6 +144,25 @@ func Prompt(ctx context.Context, client JSONRPCClient, params PromptParams) (Pro
 	return result, nil
 }
 
+func LoadSession(ctx context.Context, client JSONRPCClient, params LoadSessionParams) (json.RawMessage, error) {
+	return requestRaw(ctx, client, "session/load", params)
+}
+
+func ResumeSession(ctx context.Context, client JSONRPCClient, params ResumeSessionParams) (json.RawMessage, error) {
+	return requestRaw(ctx, client, "session/resume", params)
+}
+
+func ListSessions(ctx context.Context, client JSONRPCClient, params ListSessionsParams) (ListSessionsResult, error) {
+	var result ListSessionsResult
+	if err := requestInto(ctx, client, "session/list", params, &result); err != nil {
+		return ListSessionsResult{}, err
+	}
+	if result.Sessions == nil {
+		result.Sessions = []SessionInfo{}
+	}
+	return result, nil
+}
+
 func Cancel(ctx context.Context, client Notifier, params CancelParams) error {
 	if client == nil {
 		return errors.New("runtime ACP notifier is required")
@@ -117,6 +173,25 @@ func Cancel(ctx context.Context, client Notifier, params CancelParams) error {
 func CloseSession(ctx context.Context, client JSONRPCClient, params CloseSessionParams) error {
 	var result map[string]any
 	return requestInto(ctx, client, "session/close", params, &result)
+}
+
+func DeleteSession(ctx context.Context, client JSONRPCClient, params DeleteSessionParams) error {
+	var result map[string]any
+	return requestInto(ctx, client, "session/delete", params, &result)
+}
+
+func requestRaw(ctx context.Context, client JSONRPCClient, method string, params any) (json.RawMessage, error) {
+	if client == nil {
+		return nil, errors.New("runtime ACP client is required")
+	}
+	resultData, err := client.Request(ctx, method, params)
+	if err != nil {
+		return nil, err
+	}
+	if len(resultData) == 0 {
+		return json.RawMessage("null"), nil
+	}
+	return append(json.RawMessage(nil), resultData...), nil
 }
 
 func requestInto(ctx context.Context, client JSONRPCClient, method string, params any, out any) error {

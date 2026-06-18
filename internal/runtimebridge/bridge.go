@@ -28,9 +28,13 @@ func New(runtime RuntimeClient) *Bridge {
 func (b *Bridge) Options() []acp.Option {
 	return []acp.Option{
 		acp.WithMethod("session/new", b.newSession),
+		acp.WithMethod("session/load", b.loadSession),
+		acp.WithMethod("session/resume", b.resumeSession),
+		acp.WithMethod("session/list", b.listSessions),
 		acp.WithMethod("session/prompt", b.prompt),
 		acp.WithMethod("session/cancel", b.cancelMethod),
 		acp.WithMethod("session/close", b.closeSession),
+		acp.WithMethod("session/delete", b.deleteSession),
 		acp.WithNotification("session/cancel", b.cancelNotification),
 	}
 }
@@ -41,6 +45,40 @@ func (b *Bridge) newSession(_ *acp.MethodContext, params json.RawMessage) (any, 
 		return nil, rpcErr
 	}
 	result, err := runtimeacp.NewSession(context.Background(), b.runtime, req)
+	if err != nil {
+		return nil, mapRuntimeError(err)
+	}
+	return result, nil
+}
+
+func (b *Bridge) loadSession(ctx *acp.MethodContext, params json.RawMessage) (any, *acp.RPCError) {
+	var req runtimeacp.LoadSessionParams
+	if rpcErr := decodeParams(params, &req); rpcErr != nil {
+		return nil, rpcErr
+	}
+	return b.callWithEvents(ctx, func() (any, error) {
+		return runtimeacp.LoadSession(context.Background(), b.runtime, req)
+	})
+}
+
+func (b *Bridge) resumeSession(_ *acp.MethodContext, params json.RawMessage) (any, *acp.RPCError) {
+	var req runtimeacp.ResumeSessionParams
+	if rpcErr := decodeParams(params, &req); rpcErr != nil {
+		return nil, rpcErr
+	}
+	result, err := runtimeacp.ResumeSession(context.Background(), b.runtime, req)
+	if err != nil {
+		return nil, mapRuntimeError(err)
+	}
+	return result, nil
+}
+
+func (b *Bridge) listSessions(_ *acp.MethodContext, params json.RawMessage) (any, *acp.RPCError) {
+	var req runtimeacp.ListSessionsParams
+	if rpcErr := decodeParams(params, &req); rpcErr != nil {
+		return nil, rpcErr
+	}
+	result, err := runtimeacp.ListSessions(context.Background(), b.runtime, req)
 	if err != nil {
 		return nil, mapRuntimeError(err)
 	}
@@ -82,6 +120,17 @@ func (b *Bridge) closeSession(_ *acp.MethodContext, params json.RawMessage) (any
 		return nil, rpcErr
 	}
 	if err := runtimeacp.CloseSession(context.Background(), b.runtime, req); err != nil {
+		return nil, mapRuntimeError(err)
+	}
+	return map[string]any{}, nil
+}
+
+func (b *Bridge) deleteSession(_ *acp.MethodContext, params json.RawMessage) (any, *acp.RPCError) {
+	var req runtimeacp.DeleteSessionParams
+	if rpcErr := decodeParams(params, &req); rpcErr != nil {
+		return nil, rpcErr
+	}
+	if err := runtimeacp.DeleteSession(context.Background(), b.runtime, req); err != nil {
 		return nil, mapRuntimeError(err)
 	}
 	return map[string]any{}, nil

@@ -58,6 +58,8 @@ func TestRuntimeFlagsStartProcessBackedACPBridge(t *testing.T) {
 		`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`,
 		`{"jsonrpc":"2.0","id":2,"method":"session/new","params":{"cwd":"` + workdir + `"}}`,
 		`{"jsonrpc":"2.0","id":3,"method":"session/prompt","params":{"sessionId":"app-session","prompt":[{"type":"text","text":"hello"}]}}`,
+		`{"jsonrpc":"2.0","id":4,"method":"session/list","params":{"cwd":"` + workdir + `"}}`,
+		`{"jsonrpc":"2.0","id":5,"method":"session/delete","params":{"sessionId":"app-session"}}`,
 	}, "\n") + "\n")
 
 	code := Run([]string{
@@ -72,8 +74,8 @@ func TestRuntimeFlagsStartProcessBackedACPBridge(t *testing.T) {
 	}
 
 	responses := decodeAppResponses(t, stdout.Bytes())
-	if len(responses) != 4 {
-		t.Fatalf("got %d envelopes, want initialize, session/new, update, prompt response\n%s", len(responses), stdout.String())
+	if len(responses) != 6 {
+		t.Fatalf("got %d envelopes, want initialize, session/new, update, prompt, list, delete\n%s", len(responses), stdout.String())
 	}
 	if responses[0].Error != nil {
 		t.Fatalf("initialize error = %+v", responses[0].Error)
@@ -95,6 +97,17 @@ func TestRuntimeFlagsStartProcessBackedACPBridge(t *testing.T) {
 	if prompt.StopReason != "end_turn" {
 		t.Fatalf("stopReason = %q, want end_turn", prompt.StopReason)
 	}
+	var list struct {
+		Sessions []struct {
+			SessionID string `json:"sessionId"`
+		} `json:"sessions"`
+	}
+	decodeAppResult(t, responses[4], &list)
+	if len(list.Sessions) != 1 || list.Sessions[0].SessionID != "app-session" {
+		t.Fatalf("list result = %#v, want app-session", list)
+	}
+	var deleteResult map[string]any
+	decodeAppResult(t, responses[5], &deleteResult)
 }
 
 func TestRuntimeBinaryRequiresRuntimeWorkdir(t *testing.T) {
@@ -195,6 +208,24 @@ func TestAppRuntimeHelper(t *testing.T) {
 				"jsonrpc": "2.0",
 				"id":      json.RawMessage(msg.ID),
 				"result":  map[string]any{"stopReason": "end_turn"},
+			})
+		case "session/list":
+			_ = encoder.Encode(map[string]any{
+				"jsonrpc": "2.0",
+				"id":      json.RawMessage(msg.ID),
+				"result": map[string]any{
+					"sessions": []map[string]any{{
+						"sessionId": "app-session",
+						"cwd":       ".",
+						"title":     "App helper session",
+					}},
+				},
+			})
+		case "session/delete":
+			_ = encoder.Encode(map[string]any{
+				"jsonrpc": "2.0",
+				"id":      json.RawMessage(msg.ID),
+				"result":  map[string]any{},
 			})
 		default:
 			_ = encoder.Encode(appRuntimeError(msg.ID, -32601, fmt.Sprintf("method %s not found", msg.Method), nil))

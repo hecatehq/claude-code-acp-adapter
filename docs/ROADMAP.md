@@ -32,6 +32,8 @@
   calls before adding vendor-specific tool mappings
 - use `internal/runtimebridge` as the ACP server handler seam for
   subprocess-backed sessions
+- keep session load/resume/list/delete protocol forwarding in
+  `runtimeacp`/`runtimebridge`; vendor-specific persistence belongs above it
 - use `internal/runtimehost` to compose process launch, runtime initialize, and
   ACP server bridge options
 - expose the subprocess-backed runtime path only through explicit root runtime

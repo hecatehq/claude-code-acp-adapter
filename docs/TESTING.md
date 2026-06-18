@@ -38,9 +38,14 @@ runtime bridge.
 - ACP session lifecycle calls over the runtime JSON-RPC client: `session/new`,
   `session/prompt`, `session/cancel`, `session/close`, session updates, stop
   reasons, MCP server payloads, and RPC error propagation
+- ACP session load/resume/list/delete protocol calls, including replay updates,
+  raw resume result preservation, listed session metadata, cursor parsing, and
+  delete request forwarding
 - ACP server-to-runtime bridge behavior: handler param validation, session
   method proxying, prompt update forwarding, cancel notifications, close
   requests, and runtime RPC error mapping
+- ACP server-to-runtime bridge coverage for session load, resume, list, and
+  delete methods
 - runtime host composition: subprocess launch, ACP initialize handshake,
   initialize result retention, bridge option exposure, prompt update forwarding,
   and protocol-version mismatch cleanup
@@ -53,7 +58,9 @@ runtime bridge.
 These must be tested before Hecate switches from the current Claude Agent ACP
 adapter to this one:
 
-- session load/resume/list/fork/delete
+- vendor-specific persistent session storage and restore semantics
+- Claude-specific session fork behavior, if exposed by the chosen runtime
+  boundary
 - prompt streaming with assistant chunks and terminal prompt results
 - real normal cancellation, wedged-runtime forced cancellation, and no
   double-settle behavior

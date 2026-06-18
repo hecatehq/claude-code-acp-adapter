@@ -71,6 +71,86 @@ func TestPromptSendsTextContentAndParsesStopReason(t *testing.T) {
 	}
 }
 
+func TestLoadSessionSendsWorkspaceAndReplaysUpdates(t *testing.T) {
+	client := newSessionClient(t)
+
+	resultCh := make(chan error, 1)
+	go func() {
+		raw, err := runtimeacp.LoadSession(context.Background(), client, runtimeacp.LoadSessionParams{
+			SessionID:             "sess-test",
+			CWD:                   "/tmp/project",
+			AdditionalDirectories: []string{"/tmp/shared"},
+			MCPServers:            []runtimeacp.MCPServer{{Name: "filesystem", Command: "/bin/mcp"}},
+		})
+		if err != nil {
+			resultCh <- err
+			return
+		}
+		if string(raw) != "null" {
+			resultCh <- errors.New("load result = " + string(raw) + ", want null")
+			return
+		}
+		resultCh <- nil
+	}()
+
+	event := nextRuntimeACPEvent(t, client)
+	if event.Method != "session/update" {
+		t.Fatalf("event method = %q, want session/update", event.Method)
+	}
+	select {
+	case err := <-resultCh:
+		if err != nil {
+			t.Fatalf("LoadSession returned error: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for load result")
+	}
+}
+
+func TestResumeSessionPreservesRuntimeResult(t *testing.T) {
+	client := newSessionClient(t)
+
+	raw, err := runtimeacp.ResumeSession(context.Background(), client, runtimeacp.ResumeSessionParams{
+		SessionID: "sess-test",
+		CWD:       "/tmp/project",
+	})
+	if err != nil {
+		t.Fatalf("ResumeSession returned error: %v", err)
+	}
+	var result map[string]any
+	if err := json.Unmarshal(raw, &result); err != nil {
+		t.Fatalf("decode resume result: %v", err)
+	}
+	if result["mode"] != "default" {
+		t.Fatalf("resume result = %#v, want mode default", result)
+	}
+}
+
+func TestListSessionsParsesSessionsAndCursor(t *testing.T) {
+	client := newSessionClient(t)
+
+	result, err := runtimeacp.ListSessions(context.Background(), client, runtimeacp.ListSessionsParams{
+		CWD:    "/tmp/project",
+		Cursor: "page-1",
+	})
+	if err != nil {
+		t.Fatalf("ListSessions returned error: %v", err)
+	}
+	if len(result.Sessions) != 1 {
+		t.Fatalf("sessions len = %d, want 1", len(result.Sessions))
+	}
+	session := result.Sessions[0]
+	if session.SessionID != "sess-test" || session.CWD != "/tmp/project" || session.Title != "Test session" {
+		t.Fatalf("session = %#v, want sess-test /tmp/project Test session", session)
+	}
+	if len(session.AdditionalDirectories) != 1 || session.AdditionalDirectories[0] != "/tmp/shared" {
+		t.Fatalf("additional dirs = %#v, want /tmp/shared", session.AdditionalDirectories)
+	}
+	if result.NextCursor != "page-2" {
+		t.Fatalf("NextCursor = %q, want page-2", result.NextCursor)
+	}
+}
+
 func TestCancelSendsNotification(t *testing.T) {
 	client := newSessionClient(t)
 
@@ -88,6 +168,14 @@ func TestCloseSessionSendsRequest(t *testing.T) {
 
 	if err := runtimeacp.CloseSession(context.Background(), client, runtimeacp.CloseSessionParams{SessionID: "sess-test"}); err != nil {
 		t.Fatalf("CloseSession returned error: %v", err)
+	}
+}
+
+func TestDeleteSessionSendsRequest(t *testing.T) {
+	client := newSessionClient(t)
+
+	if err := runtimeacp.DeleteSession(context.Background(), client, runtimeacp.DeleteSessionParams{SessionID: "sess-test"}); err != nil {
+		t.Fatalf("DeleteSession returned error: %v", err)
 	}
 }
 
@@ -215,10 +303,83 @@ func TestRuntimeACPSessionHelper(t *testing.T) {
 				"id":      json.RawMessage(req.ID),
 				"result":  map[string]any{"stopReason": "end_turn"},
 			})
+		case "session/load":
+			var params runtimeacp.LoadSessionParams
+			if err := json.Unmarshal(req.Params, &params); err != nil ||
+				params.SessionID != "sess-test" ||
+				params.CWD != "/tmp/project" ||
+				len(params.MCPServers) != 1 ||
+				len(params.AdditionalDirectories) != 1 {
+				writeSessionError(encoder, req.ID, -32602, "bad load params")
+				continue
+			}
+			_ = encoder.Encode(map[string]any{
+				"jsonrpc": "2.0",
+				"method":  "session/update",
+				"params": map[string]any{
+					"sessionId": "sess-test",
+					"update": map[string]any{
+						"sessionUpdate": "user_message_chunk",
+						"content":       map[string]any{"type": "text", "text": "replayed"},
+					},
+				},
+			})
+			_ = encoder.Encode(map[string]any{
+				"jsonrpc": "2.0",
+				"id":      json.RawMessage(req.ID),
+				"result":  nil,
+			})
+		case "session/resume":
+			var params runtimeacp.ResumeSessionParams
+			if err := json.Unmarshal(req.Params, &params); err != nil ||
+				params.SessionID != "sess-test" ||
+				params.CWD != "/tmp/project" {
+				writeSessionError(encoder, req.ID, -32602, "bad resume params")
+				continue
+			}
+			_ = encoder.Encode(map[string]any{
+				"jsonrpc": "2.0",
+				"id":      json.RawMessage(req.ID),
+				"result":  map[string]any{"mode": "default"},
+			})
+		case "session/list":
+			var params runtimeacp.ListSessionsParams
+			if err := json.Unmarshal(req.Params, &params); err != nil ||
+				params.CWD != "/tmp/project" ||
+				params.Cursor != "page-1" {
+				writeSessionError(encoder, req.ID, -32602, "bad list params")
+				continue
+			}
+			_ = encoder.Encode(map[string]any{
+				"jsonrpc": "2.0",
+				"id":      json.RawMessage(req.ID),
+				"result": map[string]any{
+					"sessions": []map[string]any{{
+						"sessionId":             "sess-test",
+						"cwd":                   "/tmp/project",
+						"additionalDirectories": []string{"/tmp/shared"},
+						"title":                 "Test session",
+						"updatedAt":             "2026-06-18T05:00:00Z",
+						"_meta":                 map[string]any{"messageCount": 2},
+					}},
+					"nextCursor": "page-2",
+				},
+			})
 		case "session/close":
 			var params runtimeacp.CloseSessionParams
 			if err := json.Unmarshal(req.Params, &params); err != nil || params.SessionID != "sess-test" {
 				writeSessionError(encoder, req.ID, -32602, "bad close params")
+				continue
+			}
+			_ = encoder.Encode(map[string]any{
+				"jsonrpc": "2.0",
+				"id":      json.RawMessage(req.ID),
+				"result":  map[string]any{},
+			})
+		case "session/delete":
+			var params runtimeacp.DeleteSessionParams
+			if err := json.Unmarshal(req.Params, &params); err != nil || params.SessionID != "sess-test" {
+				writeSessionError(encoder, req.ID, -32602, "bad delete params")
 				continue
 			}
 			_ = encoder.Encode(map[string]any{

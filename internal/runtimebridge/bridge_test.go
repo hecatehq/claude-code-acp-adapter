@@ -60,6 +60,67 @@ func TestPromptForwardsRuntimeUpdatesBeforeResponse(t *testing.T) {
 	}
 }
 
+func TestLoadSessionForwardsReplayBeforeResponse(t *testing.T) {
+	runtime := newFakeRuntimeClient()
+	client := newBridgeClient(t, runtime)
+
+	envelopes := client.Send(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "load-1",
+		"method":  "session/load",
+		"params": map[string]any{
+			"sessionId": "sess-bridge",
+			"cwd":       "/tmp/project",
+		},
+	})
+	if len(envelopes) != 2 {
+		t.Fatalf("got %d envelopes, want replay notification + response", len(envelopes))
+	}
+	if envelopes[0].Method != "session/update" {
+		t.Fatalf("first envelope method = %q, want session/update", envelopes[0].Method)
+	}
+	if string(envelopes[1].Result) != "null" {
+		t.Fatalf("load result = %s, want null", envelopes[1].Result)
+	}
+}
+
+func TestResumeSessionProxiesRuntimeResult(t *testing.T) {
+	runtime := newFakeRuntimeClient()
+	client := newBridgeClient(t, runtime)
+
+	response := client.Request("session/resume", map[string]any{
+		"sessionId": "sess-bridge",
+		"cwd":       "/tmp/project",
+	})
+	var result map[string]any
+	response.ResultInto(t, &result)
+	if result["mode"] != "default" {
+		t.Fatalf("resume result = %#v, want mode default", result)
+	}
+}
+
+func TestListSessionsProxiesRuntimeResult(t *testing.T) {
+	runtime := newFakeRuntimeClient()
+	client := newBridgeClient(t, runtime)
+
+	response := client.Request("session/list", map[string]any{"cwd": "/tmp/project"})
+	var result struct {
+		Sessions []struct {
+			SessionID string `json:"sessionId"`
+			CWD       string `json:"cwd"`
+			Title     string `json:"title"`
+		} `json:"sessions"`
+		NextCursor string `json:"nextCursor"`
+	}
+	response.ResultInto(t, &result)
+	if len(result.Sessions) != 1 || result.Sessions[0].SessionID != "sess-bridge" {
+		t.Fatalf("list result = %#v, want sess-bridge", result)
+	}
+	if result.NextCursor != "next" {
+		t.Fatalf("NextCursor = %q, want next", result.NextCursor)
+	}
+}
+
 func TestCancelNotificationProxiesToRuntime(t *testing.T) {
 	runtime := newFakeRuntimeClient()
 	client := newBridgeClient(t, runtime)
@@ -81,6 +142,19 @@ func TestCloseSessionProxiesToRuntime(t *testing.T) {
 	}
 	if runtime.called("session/close") != 1 {
 		t.Fatalf("session/close calls = %d, want 1", runtime.called("session/close"))
+	}
+}
+
+func TestDeleteSessionProxiesToRuntime(t *testing.T) {
+	runtime := newFakeRuntimeClient()
+	client := newBridgeClient(t, runtime)
+
+	response := client.Request("session/delete", map[string]string{"sessionId": "sess-bridge"})
+	if response.Error != nil {
+		t.Fatalf("delete error = %+v", response.Error)
+	}
+	if runtime.called("session/delete") != 1 {
+		t.Fatalf("session/delete calls = %d, want 1", runtime.called("session/delete"))
 	}
 }
 
@@ -153,7 +227,19 @@ func (f *fakeRuntimeClient) Request(_ctx context.Context, method string, params 
 			Params: json.RawMessage(`{"sessionId":"sess-bridge","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"hi"}}}`),
 		}
 		return json.RawMessage(`{"stopReason":"end_turn"}`), nil
+	case "session/load":
+		f.events <- runtimejsonrpc.Event{
+			Method: "session/update",
+			Params: json.RawMessage(`{"sessionId":"sess-bridge","update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"replay"}}}`),
+		}
+		return json.RawMessage(`null`), nil
+	case "session/resume":
+		return json.RawMessage(`{"mode":"default"}`), nil
+	case "session/list":
+		return json.RawMessage(`{"sessions":[{"sessionId":"sess-bridge","cwd":"/tmp/project","title":"Bridge session"}],"nextCursor":"next"}`), nil
 	case "session/close":
+		return json.RawMessage(`{}`), nil
+	case "session/delete":
 		return json.RawMessage(`{}`), nil
 	default:
 		return nil, &runtimejsonrpc.RPCError{Code: -32601, Message: "method not found"}

@@ -33,11 +33,12 @@ Implemented:
 - typed ACP session lifecycle calls for subprocess runtimes
 - ACP server-to-runtime bridge for session methods and streamed updates
 - runtime host seam that launches, initializes, and exposes the bridged child
+- protocol forwarding for session load, resume, list, and delete
 
 Not implemented yet:
 
 - Claude Code / Claude Agent SDK integration
-- real runtime-backed session load/resume/list
+- vendor-specific persistent session semantics
 - vendor-specific prompt/tool/permission/elicitation mapping
 - runtime config/auth/model discovery and orphan-result handling
 - release packaging
