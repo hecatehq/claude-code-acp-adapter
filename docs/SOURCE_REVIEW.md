@@ -60,6 +60,7 @@ Minimum safety requirements:
 - fixed argv arrays
 - explicit environment allowlist
 - bounded JSON message size
+- newline-delimited JSON-RPC only on stdout for subprocess protocol bridges
 - bounded stdout/stderr capture for subprocess-backed paths
 - deterministic platform release artifacts
 - fake-Claude protocol tests for sessions, settings, permissions,

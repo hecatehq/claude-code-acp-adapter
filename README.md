@@ -28,6 +28,7 @@ Implemented:
 - unit tests for the protocol scaffold
 - `doctor` command for probing the local Claude Code binary boundary
 - process-backed runtime launcher seam
+- subprocess JSON-RPC client for ACP-style stdio runtime bridges
 
 Not implemented yet:
 
