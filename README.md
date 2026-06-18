@@ -67,6 +67,12 @@ runner, and reports selected environment variable presence without printing
 secret values. Use `--binary` to point at a non-default Claude executable and
 `--json` for machine-readable output.
 
+The root ACP server can also launch an opt-in subprocess-backed runtime with
+`--runtime-binary`, `--runtime-workdir`, and repeated `--runtime-arg` flags.
+Without `--runtime-binary`, the adapter keeps the scaffold handlers so the
+protocol shell remains safe to test before the real Claude Code boundary is
+enabled.
+
 ## Source Review
 
 Before implementing the real bridge, read [docs/SOURCE_REVIEW.md](docs/SOURCE_REVIEW.md).

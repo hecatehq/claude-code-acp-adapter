@@ -9,6 +9,9 @@ import (
 
 	"github.com/hecatehq/claude-code-acp-adapter/internal/acp"
 	"github.com/hecatehq/claude-code-acp-adapter/internal/doctor"
+	"github.com/hecatehq/claude-code-acp-adapter/internal/runtimeacp"
+	"github.com/hecatehq/claude-code-acp-adapter/internal/runtimehost"
+	"github.com/hecatehq/claude-code-acp-adapter/internal/runtimeproc"
 	"github.com/spf13/cobra"
 )
 
@@ -29,6 +32,10 @@ func Run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int
 }
 
 func newRootCommand(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.Command {
+	var runtimeBinary string
+	var runtimeWorkDir string
+	var runtimeArgs []string
+
 	cmd := &cobra.Command{
 		Use:           Name,
 		Short:         "ACP adapter for Claude Code",
@@ -39,17 +46,33 @@ func newRootCommand(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.
 			if len(args) != 0 {
 				return fmt.Errorf("unknown argument: %s", args[0])
 			}
-			server := acp.NewServer(acp.AdapterInfo{
-				Name:    Name,
-				Title:   Title,
-				Version: Version,
-				Capabilities: acp.Capabilities{
-					Images:          true,
-					EmbeddedContext: true,
-					MCPHTTP:         true,
-					MCPSSE:          true,
-				},
-			})
+			info := adapterInfo()
+			var opts []acp.Option
+			if runtimeBinary != "" {
+				if runtimeWorkDir == "" {
+					return fmt.Errorf("--runtime-workdir is required when --runtime-binary is set")
+				}
+				host, err := runtimehost.Start(cmd.Context(), runtimehost.Spec{
+					Launch: runtimeproc.LaunchSpec{
+						Binary:  runtimeBinary,
+						Args:    runtimeArgs,
+						WorkDir: runtimeWorkDir,
+					},
+					ClientInfo: runtimeacp.ImplementationInfo{
+						Name:    info.Name,
+						Title:   info.Title,
+						Version: info.Version,
+					},
+				})
+				if err != nil {
+					return fmt.Errorf("start runtime host: %w", err)
+				}
+				defer func() {
+					_ = host.Close()
+				}()
+				opts = host.Options()
+			}
+			server := acp.NewServer(info, opts...)
 			if err := server.Serve(stdin, stdout); err != nil {
 				return fmt.Errorf("adapter error: %w", err)
 			}
@@ -59,6 +82,9 @@ func newRootCommand(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.
 	cmd.SetIn(stdin)
 	cmd.SetOut(stdout)
 	cmd.SetErr(stderr)
+	cmd.Flags().StringVar(&runtimeBinary, "runtime-binary", "", "runtime executable to launch instead of scaffold handlers")
+	cmd.Flags().StringVar(&runtimeWorkDir, "runtime-workdir", "", "absolute working directory for the runtime process")
+	cmd.Flags().StringArrayVar(&runtimeArgs, "runtime-arg", nil, "argument to pass to the runtime process; repeat to pass multiple arguments")
 
 	cmd.AddCommand(&cobra.Command{
 		Use:           "version",
@@ -73,6 +99,20 @@ func newRootCommand(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.
 	cmd.AddCommand(newDoctorCommand(stdout))
 	cmd.SetVersionTemplate(fmt.Sprintf("%s %s\n", Name, Version))
 	return cmd
+}
+
+func adapterInfo() acp.AdapterInfo {
+	return acp.AdapterInfo{
+		Name:    Name,
+		Title:   Title,
+		Version: Version,
+		Capabilities: acp.Capabilities{
+			Images:          true,
+			EmbeddedContext: true,
+			MCPHTTP:         true,
+			MCPSSE:          true,
+		},
+	}
 }
 
 func newDoctorCommand(stdout io.Writer) *cobra.Command {

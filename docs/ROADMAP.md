@@ -34,6 +34,8 @@
   subprocess-backed sessions
 - use `internal/runtimehost` to compose process launch, runtime initialize, and
   ACP server bridge options
+- expose the subprocess-backed runtime path only through explicit root runtime
+  flags until the Claude Code boundary is stable
 - keep `doctor` green against the target Claude Code binary before enabling
   real runtime sessions
 - choose a stable Claude Code / Claude Agent SDK integration boundary
