@@ -29,6 +29,8 @@
   stdio
 - use `runtimejsonrpc.Client.Respond` for child runtime requests that need a
   JSON-RPC response instead of treating every child request as terminal
+- use `acp.MethodContext.Request` when a runtime child request must be
+  forwarded to the ACP client and answered before the prompt can finish
 - use `internal/runtimeacp` for subprocess ACP lifecycle negotiation
 - build real session bridges on the typed `runtimeacp` initialize/session
   calls before adding vendor-specific tool mappings

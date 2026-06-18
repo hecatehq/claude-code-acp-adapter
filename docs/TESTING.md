@@ -8,6 +8,8 @@ runtime bridge.
 - CLI version output
 - ACP `initialize` response shape
 - request ID preservation
+- server-to-client JSON-RPC requests from handlers, including successful
+  client responses and client RPC errors
 - malformed JSON errors without stopping later requests
 - invalid JSON-RPC version errors
 - notification dispatch without responses
@@ -48,6 +50,8 @@ runtime bridge.
   requests, and runtime RPC error mapping
 - ACP server-to-runtime bridge coverage for session load, resume, list, and
   delete methods
+- ACP bridge forwarding for runtime child requests that require client
+  responses, including returning the client result to the child runtime
 - runtime host composition: subprocess launch, ACP initialize handshake,
   initialize result retention, bridge option exposure, prompt update forwarding,
   and protocol-version mismatch cleanup

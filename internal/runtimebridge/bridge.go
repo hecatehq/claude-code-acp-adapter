@@ -15,6 +15,7 @@ type RuntimeClient interface {
 	runtimeacp.JSONRPCClient
 	runtimeacp.Notifier
 	Events() <-chan runtimejsonrpc.Event
+	Respond(ctx context.Context, id json.RawMessage, result any, rpcErr *runtimejsonrpc.RPCError) error
 }
 
 type Bridge struct {
@@ -159,12 +160,36 @@ func (b *Bridge) callWithEvents(ctx *acp.MethodContext, call func() (any, error)
 				return nil, mapRuntimeError(errors.New("runtime event stream closed"))
 			}
 			if len(event.ID) != 0 {
-				return nil, mapRuntimeError(fmt.Errorf("runtime client request %s is not supported yet", string(event.ID)))
+				result, rpcErr, err := ctx.Request(event.Method, eventParams(event))
+				if err != nil {
+					return nil, mapRuntimeError(fmt.Errorf("forward runtime client request %s: %w", string(event.ID), err))
+				}
+				if err := b.runtime.Respond(context.Background(), event.ID, result, runtimeError(rpcErr)); err != nil {
+					return nil, mapRuntimeError(fmt.Errorf("respond to runtime client request %s: %w", string(event.ID), err))
+				}
+				continue
 			}
 			if err := ctx.Notify(event.Method, eventParams(event)); err != nil {
 				return nil, &acp.RPCError{Code: -32000, Message: "notification failed", Data: err.Error()}
 			}
 		}
+	}
+}
+
+func runtimeError(rpcErr *acp.RPCError) *runtimejsonrpc.RPCError {
+	if rpcErr == nil {
+		return nil
+	}
+	var data json.RawMessage
+	if rpcErr.Data != nil {
+		if raw, err := json.Marshal(rpcErr.Data); err == nil {
+			data = raw
+		}
+	}
+	return &runtimejsonrpc.RPCError{
+		Code:    rpcErr.Code,
+		Message: rpcErr.Message,
+		Data:    data,
 	}
 }
 

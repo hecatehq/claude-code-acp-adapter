@@ -38,6 +38,7 @@ type NotificationHandler func(params json.RawMessage) error
 
 type MethodContext struct {
 	encoder *json.Encoder
+	conn    *connection
 }
 
 func (c *MethodContext) Notify(method string, params any) error {
@@ -46,6 +47,37 @@ func (c *MethodContext) Notify(method string, params any) error {
 		Method:  method,
 		Params:  params,
 	})
+}
+
+func (c *MethodContext) Request(method string, params any) (json.RawMessage, *RPCError, error) {
+	if c == nil || c.conn == nil {
+		return nil, nil, errors.New("method context is not connected")
+	}
+	id := c.conn.nextRequestID()
+	if err := c.encoder.Encode(serverRequest{
+		JSONRPC: "2.0",
+		ID:      id,
+		Method:  method,
+		Params:  params,
+	}); err != nil {
+		return nil, nil, err
+	}
+	for {
+		msg, ok, err := c.conn.readMessage()
+		if err != nil {
+			return nil, nil, err
+		}
+		if !ok {
+			return nil, nil, io.EOF
+		}
+		if msg.ID != nil && msg.Method == "" && string(*msg.ID) == string(id) {
+			return append(json.RawMessage(nil), msg.Result...), msg.Error, nil
+		}
+		if msg.ID == nil {
+			continue
+		}
+		return nil, nil, fmt.Errorf("unexpected message while waiting for response to %s", string(id))
+	}
 }
 
 func WithMethod(method string, handler MethodHandler) Option {
@@ -82,19 +114,27 @@ func (s *Server) Serve(input io.Reader, output io.Writer) error {
 
 	scanner := bufio.NewScanner(input)
 	scanner.Buffer(make([]byte, 0, 64*1024), maxMessageBytes)
-	encoder := json.NewEncoder(output)
+	conn := &connection{
+		scanner: scanner,
+		encoder: json.NewEncoder(output),
+	}
 
-	for scanner.Scan() {
-		line := scanner.Bytes()
-		if len(line) == 0 {
-			continue
-		}
-
-		var req request
-		if err := json.Unmarshal(line, &req); err != nil {
-			if err := encoder.Encode(errorResponse(nil, -32700, "parse error", err.Error())); err != nil {
+	for {
+		req, ok, err := conn.readMessage()
+		if err != nil {
+			var parseErr parseMessageError
+			if !errors.As(err, &parseErr) {
 				return err
 			}
+			if err := conn.encoder.Encode(errorResponse(nil, -32700, "parse error", parseErr.Err.Error())); err != nil {
+				return err
+			}
+			continue
+		}
+		if !ok {
+			break
+		}
+		if req.Method == "" {
 			continue
 		}
 		if req.ID == nil {
@@ -105,8 +145,13 @@ func (s *Server) Serve(input io.Reader, output io.Writer) error {
 			}
 			continue
 		}
-		ctx := &MethodContext{encoder: encoder}
-		if err := encoder.Encode(s.handle(ctx, req)); err != nil {
+		ctx := &MethodContext{encoder: conn.encoder, conn: conn}
+		if err := conn.encoder.Encode(s.handle(ctx, request{
+			JSONRPC: req.JSONRPC,
+			ID:      req.ID,
+			Method:  req.Method,
+			Params:  req.Params,
+		})); err != nil {
 			return err
 		}
 	}
@@ -167,10 +212,26 @@ type request struct {
 	Params  json.RawMessage  `json:"params,omitempty"`
 }
 
+type message struct {
+	JSONRPC string           `json:"jsonrpc,omitempty"`
+	ID      *json.RawMessage `json:"id,omitempty"`
+	Method  string           `json:"method,omitempty"`
+	Params  json.RawMessage  `json:"params,omitempty"`
+	Result  json.RawMessage  `json:"result,omitempty"`
+	Error   *RPCError        `json:"error,omitempty"`
+}
+
 type serverNotification struct {
 	JSONRPC string `json:"jsonrpc"`
 	Method  string `json:"method"`
 	Params  any    `json:"params,omitempty"`
+}
+
+type serverRequest struct {
+	JSONRPC string          `json:"jsonrpc"`
+	ID      json.RawMessage `json:"id"`
+	Method  string          `json:"method"`
+	Params  any             `json:"params,omitempty"`
 }
 
 type response struct {
@@ -223,3 +284,48 @@ type agentInfo struct {
 }
 
 type authMethod struct{}
+
+type connection struct {
+	scanner *bufio.Scanner
+	encoder *json.Encoder
+	nextID  int64
+}
+
+func (c *connection) readMessage() (message, bool, error) {
+	for c.scanner.Scan() {
+		line := c.scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+		var msg message
+		if err := json.Unmarshal(line, &msg); err != nil {
+			return message{}, false, parseMessageError{Err: err}
+		}
+		return msg, true, nil
+	}
+	if err := c.scanner.Err(); err != nil {
+		return message{}, false, err
+	}
+	return message{}, false, nil
+}
+
+func (c *connection) nextRequestID() json.RawMessage {
+	c.nextID++
+	raw, err := json.Marshal(fmt.Sprintf("server-%d", c.nextID))
+	if err != nil {
+		panic(err)
+	}
+	return raw
+}
+
+type parseMessageError struct {
+	Err error
+}
+
+func (e parseMessageError) Error() string {
+	return e.Err.Error()
+}
+
+func (e parseMessageError) Unwrap() error {
+	return e.Err
+}

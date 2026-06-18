@@ -3,6 +3,7 @@ package runtimebridge_test
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"sync"
 	"testing"
 
@@ -57,6 +58,41 @@ func TestPromptForwardsRuntimeUpdatesBeforeResponse(t *testing.T) {
 	envelopes[1].ResultInto(t, &result)
 	if result.StopReason != "end_turn" {
 		t.Fatalf("stopReason = %q, want end_turn", result.StopReason)
+	}
+}
+
+func TestPromptForwardsRuntimeChildRequestAndReturnsClientResponse(t *testing.T) {
+	runtime := newFakeRuntimeClient()
+	runtime.childRequest = true
+	client := newBridgeClient(t, runtime)
+
+	envelopes := client.SendRaw(strings.Join([]string{
+		`{"jsonrpc":"2.0","id":"prompt-1","method":"session/prompt","params":{"sessionId":"sess-bridge","prompt":[{"type":"text","text":"needs permission"}]}}`,
+		`{"jsonrpc":"2.0","id":"server-1","result":{"outcome":"approved"}}`,
+	}, "\n") + "\n")
+	if len(envelopes) != 2 {
+		t.Fatalf("got %d envelopes, want child request + prompt response", len(envelopes))
+	}
+	if envelopes[0].Method != "session/request_permission" {
+		t.Fatalf("child request method = %q, want session/request_permission", envelopes[0].Method)
+	}
+	if string(envelopes[0].ID) != `"server-1"` {
+		t.Fatalf("child request id = %s, want server-1", envelopes[0].ID)
+	}
+	var result struct {
+		StopReason string `json:"stopReason"`
+	}
+	envelopes[1].ResultInto(t, &result)
+	if result.StopReason != "end_turn" {
+		t.Fatalf("stopReason = %q, want end_turn", result.StopReason)
+	}
+
+	response := runtime.nextResponse(t)
+	if string(response.id) != `"runtime-child-1"` {
+		t.Fatalf("runtime response id = %s, want runtime-child-1", response.id)
+	}
+	if !strings.Contains(string(response.result), "approved") {
+		t.Fatalf("runtime response result = %s, want approved", response.result)
 	}
 }
 
@@ -200,6 +236,9 @@ type fakeRuntimeClient struct {
 	notifications map[string]int
 	events        chan runtimejsonrpc.Event
 	err           error
+	childRequest  bool
+	responses     chan runtimeChildResponse
+	lastResponse  *runtimeChildResponse
 }
 
 func newFakeRuntimeClient() *fakeRuntimeClient {
@@ -207,6 +246,7 @@ func newFakeRuntimeClient() *fakeRuntimeClient {
 		calls:         map[string]int{},
 		notifications: map[string]int{},
 		events:        make(chan runtimejsonrpc.Event, 8),
+		responses:     make(chan runtimeChildResponse, 8),
 	}
 }
 
@@ -222,6 +262,15 @@ func (f *fakeRuntimeClient) Request(_ctx context.Context, method string, params 
 	case "session/new":
 		return json.RawMessage(`{"sessionId":"sess-bridge"}`), nil
 	case "session/prompt":
+		if f.childRequest {
+			f.events <- runtimejsonrpc.Event{
+				ID:     json.RawMessage(`"runtime-child-1"`),
+				Method: "session/request_permission",
+				Params: json.RawMessage(`{"sessionId":"sess-bridge","toolCallId":"tool-1"}`),
+			}
+			<-f.responses
+			return json.RawMessage(`{"stopReason":"end_turn"}`), nil
+		}
 		f.events <- runtimejsonrpc.Event{
 			Method: "session/update",
 			Params: json.RawMessage(`{"sessionId":"sess-bridge","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"hi"}}}`),
@@ -256,6 +305,23 @@ func (f *fakeRuntimeClient) Notify(_ctx context.Context, method string, _params 
 	return nil
 }
 
+func (f *fakeRuntimeClient) Respond(_ctx context.Context, id json.RawMessage, result any, rpcErr *runtimejsonrpc.RPCError) error {
+	raw, err := json.Marshal(result)
+	if err != nil {
+		return err
+	}
+	response := runtimeChildResponse{
+		id:     append(json.RawMessage(nil), id...),
+		result: raw,
+		err:    rpcErr,
+	}
+	f.mu.Lock()
+	f.lastResponse = &response
+	f.mu.Unlock()
+	f.responses <- response
+	return nil
+}
+
 func (f *fakeRuntimeClient) Events() <-chan runtimejsonrpc.Event {
 	return f.events
 }
@@ -270,6 +336,22 @@ func (f *fakeRuntimeClient) notified(method string) int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.notifications[method]
+}
+
+func (f *fakeRuntimeClient) nextResponse(t testing.TB) runtimeChildResponse {
+	t.Helper()
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.lastResponse == nil {
+		t.Fatal("runtime response was not recorded")
+	}
+	return *f.lastResponse
+}
+
+type runtimeChildResponse struct {
+	id     json.RawMessage
+	result json.RawMessage
+	err    *runtimejsonrpc.RPCError
 }
 
 var _ runtimebridge.RuntimeClient = (*fakeRuntimeClient)(nil)
