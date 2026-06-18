@@ -25,11 +25,39 @@ type Capabilities struct {
 }
 
 type Server struct {
-	info AdapterInfo
+	info          AdapterInfo
+	methods       map[string]MethodHandler
+	notifications map[string]NotificationHandler
 }
 
-func NewServer(info AdapterInfo) *Server {
-	return &Server{info: info}
+type Option func(*Server)
+
+type MethodHandler func(params json.RawMessage) (any, *RPCError)
+
+type NotificationHandler func(params json.RawMessage) error
+
+func WithMethod(method string, handler MethodHandler) Option {
+	return func(s *Server) {
+		s.methods[method] = handler
+	}
+}
+
+func WithNotification(method string, handler NotificationHandler) Option {
+	return func(s *Server) {
+		s.notifications[method] = handler
+	}
+}
+
+func NewServer(info AdapterInfo, opts ...Option) *Server {
+	server := &Server{
+		info:          info,
+		methods:       map[string]MethodHandler{},
+		notifications: map[string]NotificationHandler{},
+	}
+	for _, opt := range opts {
+		opt(server)
+	}
+	return server
 }
 
 func (s *Server) Serve(input io.Reader, output io.Writer) error {
@@ -58,6 +86,11 @@ func (s *Server) Serve(input io.Reader, output io.Writer) error {
 			continue
 		}
 		if req.ID == nil {
+			if handler := s.notifications[req.Method]; handler != nil {
+				if err := handler(req.Params); err != nil {
+					return err
+				}
+			}
 			continue
 		}
 		if err := encoder.Encode(s.handle(req)); err != nil {
@@ -94,8 +127,22 @@ func (s *Server) handle(req request) response {
 			AuthMethods: []authMethod{},
 		})
 	case "session/new", "session/load", "session/resume", "session/list", "session/prompt", "session/cancel", "session/close":
+		if handler := s.methods[req.Method]; handler != nil {
+			result, rpcErr := handler(req.Params)
+			if rpcErr != nil {
+				return response{JSONRPC: "2.0", ID: req.ID, Error: rpcErr}
+			}
+			return resultResponse(req.ID, result)
+		}
 		return errorResponse(req.ID, -32004, "not implemented", fmt.Sprintf("%s is not implemented in this scaffold", req.Method))
 	default:
+		if handler := s.methods[req.Method]; handler != nil {
+			result, rpcErr := handler(req.Params)
+			if rpcErr != nil {
+				return response{JSONRPC: "2.0", ID: req.ID, Error: rpcErr}
+			}
+			return resultResponse(req.ID, result)
+		}
 		return errorResponse(req.ID, -32601, "method not found", req.Method)
 	}
 }
@@ -111,10 +158,10 @@ type response struct {
 	JSONRPC string           `json:"jsonrpc"`
 	ID      *json.RawMessage `json:"id"`
 	Result  any              `json:"result,omitempty"`
-	Error   *rpcError        `json:"error,omitempty"`
+	Error   *RPCError        `json:"error,omitempty"`
 }
 
-type rpcError struct {
+type RPCError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
 	Data    any    `json:"data,omitempty"`
@@ -125,7 +172,7 @@ func resultResponse(id *json.RawMessage, result any) response {
 }
 
 func errorResponse(id *json.RawMessage, code int, message string, data any) response {
-	return response{JSONRPC: "2.0", ID: id, Error: &rpcError{Code: code, Message: message, Data: data}}
+	return response{JSONRPC: "2.0", ID: id, Error: &RPCError{Code: code, Message: message, Data: data}}
 }
 
 type initializeResult struct {

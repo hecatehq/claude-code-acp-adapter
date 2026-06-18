@@ -11,6 +11,7 @@
 - typed ACP request/response structs for the methods this adapter supports
 - golden transcript tests
 - fake ACP client test harness
+- fake runtime method/notification dispatch through the real stdio path
 
 ## Phase 2: Fake Claude Runtime
 

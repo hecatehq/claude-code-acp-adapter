@@ -44,6 +44,9 @@ go test ./...
 go run ./cmd/claude-code-acp-adapter --version
 ```
 
+See [docs/TESTING.md](docs/TESTING.md) for what is covered today and what must
+be covered before this adapter can replace the current Claude Agent ACP bridge.
+
 ## Source Review
 
 Before implementing the real bridge, read [docs/SOURCE_REVIEW.md](docs/SOURCE_REVIEW.md).
