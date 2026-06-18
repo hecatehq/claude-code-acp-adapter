@@ -59,6 +59,8 @@ runtime bridge.
 - ACP server-to-runtime bridge behavior: handler param validation, session
   method proxying, prompt update forwarding, cancel notifications, close
   requests, and runtime RPC error mapping
+- ACP bridge forwarding for setup-time `session/update` notifications emitted
+  before `session/new` responds
 - ACP server-to-runtime bridge coverage for session load, resume, list, and
   delete methods
 - ACP bridge forwarding for dynamic `session/update` payloads such as

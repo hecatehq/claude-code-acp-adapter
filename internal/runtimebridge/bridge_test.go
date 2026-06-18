@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/hecatehq/claude-code-acp-adapter/internal/acp"
 	"github.com/hecatehq/claude-code-acp-adapter/internal/acptest"
@@ -35,6 +36,58 @@ func TestNewSessionProxiesToRuntime(t *testing.T) {
 	}
 	if runtime.called("session/new") != 1 {
 		t.Fatalf("session/new calls = %d, want 1", runtime.called("session/new"))
+	}
+}
+
+func TestNewSessionForwardsRuntimeUpdatesBeforeResponse(t *testing.T) {
+	runtime := newFakeRuntimeClient()
+	runtime.events = make(chan runtimejsonrpc.Event)
+	runtime.newSessionUpdates = []json.RawMessage{
+		json.RawMessage(`{"sessionId":"sess-bridge","update":{"sessionUpdate":"available_commands_update","availableCommands":[{"name":"plan","description":"Create a plan"}]}}`),
+	}
+	client := newBridgeClient(t, runtime)
+
+	responsesCh := make(chan []acptest.Response, 1)
+	go func() {
+		responsesCh <- client.Send(map[string]any{
+			"jsonrpc": "2.0",
+			"id":      "session-1",
+			"method":  "session/new",
+			"params":  map[string]any{"cwd": "/tmp/project"},
+		})
+	}()
+
+	var envelopes []acptest.Response
+	select {
+	case envelopes = <-responsesCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for session/new response; bridge did not drain runtime update")
+	}
+	if len(envelopes) != 2 {
+		t.Fatalf("got %d envelopes, want available commands update + session/new response", len(envelopes))
+	}
+	var commands struct {
+		SessionID string `json:"sessionId"`
+		Update    struct {
+			SessionUpdate     string `json:"sessionUpdate"`
+			AvailableCommands []struct {
+				Name string `json:"name"`
+			} `json:"availableCommands"`
+		} `json:"update"`
+	}
+	envelopes[0].ParamsInto(t, &commands)
+	if commands.SessionID != "sess-bridge" ||
+		commands.Update.SessionUpdate != "available_commands_update" ||
+		len(commands.Update.AvailableCommands) != 1 ||
+		commands.Update.AvailableCommands[0].Name != "plan" {
+		t.Fatalf("available commands update = %#v", commands)
+	}
+	var result struct {
+		SessionID string `json:"sessionId"`
+	}
+	envelopes[1].ResultInto(t, &result)
+	if result.SessionID != "sess-bridge" {
+		t.Fatalf("sessionId = %q, want sess-bridge", result.SessionID)
 	}
 }
 
@@ -363,15 +416,16 @@ func newBridgeClient(t testing.TB, runtime *fakeRuntimeClient) *acptest.Client {
 }
 
 type fakeRuntimeClient struct {
-	mu            sync.Mutex
-	calls         map[string]int
-	notifications map[string]int
-	events        chan runtimejsonrpc.Event
-	err           error
-	childRequest  bool
-	promptUpdates []json.RawMessage
-	responses     chan runtimeChildResponse
-	lastResponse  *runtimeChildResponse
+	mu                sync.Mutex
+	calls             map[string]int
+	notifications     map[string]int
+	events            chan runtimejsonrpc.Event
+	err               error
+	childRequest      bool
+	newSessionUpdates []json.RawMessage
+	promptUpdates     []json.RawMessage
+	responses         chan runtimeChildResponse
+	lastResponse      *runtimeChildResponse
 }
 
 func newFakeRuntimeClient() *fakeRuntimeClient {
@@ -393,6 +447,12 @@ func (f *fakeRuntimeClient) Request(_ctx context.Context, method string, params 
 	}
 	switch method {
 	case "session/new":
+		for _, params := range f.newSessionUpdates {
+			f.events <- runtimejsonrpc.Event{
+				Method: "session/update",
+				Params: append(json.RawMessage(nil), params...),
+			}
+		}
 		return json.RawMessage(`{"sessionId":"sess-bridge","configOptions":[{"id":"model","name":"Model","type":"select","currentValue":"fast","options":[{"value":"fast","name":"Fast"}]}],"modes":{"currentModeId":"ask"}}`), nil
 	case "session/prompt":
 		if f.childRequest {

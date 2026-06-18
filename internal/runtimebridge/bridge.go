@@ -66,16 +66,14 @@ func (b *Bridge) logout(_ *acp.MethodContext, params json.RawMessage) (any, *acp
 	return map[string]any{}, nil
 }
 
-func (b *Bridge) newSession(_ *acp.MethodContext, params json.RawMessage) (any, *acp.RPCError) {
+func (b *Bridge) newSession(ctx *acp.MethodContext, params json.RawMessage) (any, *acp.RPCError) {
 	var req runtimeacp.NewSessionParams
 	if rpcErr := decodeParams(params, &req); rpcErr != nil {
 		return nil, rpcErr
 	}
-	result, err := runtimeacp.NewSession(context.Background(), b.runtime, req)
-	if err != nil {
-		return nil, mapRuntimeError(err)
-	}
-	return result, nil
+	return b.callWithEvents(ctx, func() (any, error) {
+		return runtimeacp.NewSession(context.Background(), b.runtime, req)
+	})
 }
 
 func (b *Bridge) loadSession(ctx *acp.MethodContext, params json.RawMessage) (any, *acp.RPCError) {
