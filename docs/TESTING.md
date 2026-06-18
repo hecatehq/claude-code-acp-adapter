@@ -11,6 +11,8 @@ runtime bridge.
   dynamic initialize results
 - runtime-backed initialize passthrough so child agent info, capabilities, and
   auth methods reach the ACP client
+- runtime-backed initialize result wrappers preserve runtime-provided extension
+  fields through the runtime host
 - runtime initialize forwarding for client terminal-auth capability
 - runtime ACP auth calls: `authenticate` method-id forwarding and `logout`
   request forwarding

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/hecatehq/claude-code-acp-adapter/internal/runtimeacp"
@@ -38,6 +39,13 @@ func TestInitializeSendsClientInfoAndParsesResult(t *testing.T) {
 	}
 	if _, ok := result.AgentCapabilities.SessionCapabilities["list"]; !ok {
 		t.Fatalf("SessionCapabilities = %#v, want list", result.AgentCapabilities.SessionCapabilities)
+	}
+	raw, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("marshal result: %v", err)
+	}
+	if !strings.Contains(string(raw), `"x-result":{"kept":true}`) {
+		t.Fatalf("marshaled result = %s, want x-result preserved", raw)
 	}
 }
 
@@ -199,6 +207,7 @@ func TestRuntimeACPInitializeHelper(t *testing.T) {
 					"version": "9.9.9",
 				},
 				"authMethods": []map[string]any{},
+				"x-result":    map[string]any{"kept": true},
 			},
 		})
 	case "version-mismatch":
