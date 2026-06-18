@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	adapterprocess "github.com/hecatehq/acp-adapter-kit/process"
 	"github.com/hecatehq/claude-code-acp-adapter/internal/doctor"
-	adapterprocess "github.com/hecatehq/claude-code-acp-adapter/internal/process"
 )
 
 func TestRunHappyPath(t *testing.T) {
