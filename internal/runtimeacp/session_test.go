@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -31,6 +32,16 @@ func TestNewSessionSendsWorkspaceAndMCPServers(t *testing.T) {
 	}
 	if result.SessionID != "sess-test" {
 		t.Fatalf("SessionID = %q, want sess-test", result.SessionID)
+	}
+	if len(result.ConfigOptions) != 1 {
+		t.Fatalf("ConfigOptions len = %d, want 1", len(result.ConfigOptions))
+	}
+	raw, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("marshal result: %v", err)
+	}
+	if !strings.Contains(string(raw), `"configOptions"`) || !strings.Contains(string(raw), `"modes"`) {
+		t.Fatalf("marshaled result = %s, want configOptions and modes preserved", raw)
 	}
 }
 
@@ -275,7 +286,19 @@ func TestRuntimeACPSessionHelper(t *testing.T) {
 			_ = encoder.Encode(map[string]any{
 				"jsonrpc": "2.0",
 				"id":      json.RawMessage(req.ID),
-				"result":  map[string]any{"sessionId": "sess-test"},
+				"result": map[string]any{
+					"sessionId": "sess-test",
+					"configOptions": []map[string]any{{
+						"id":           "model",
+						"name":         "Model",
+						"type":         "select",
+						"currentValue": "fast",
+						"options":      []map[string]any{{"value": "fast", "name": "Fast"}},
+					}},
+					"modes": map[string]any{
+						"currentModeId": "ask",
+					},
+				},
 			})
 		case "session/prompt":
 			var params runtimeacp.PromptParams

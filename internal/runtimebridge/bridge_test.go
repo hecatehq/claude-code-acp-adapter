@@ -28,6 +28,11 @@ func TestNewSessionProxiesToRuntime(t *testing.T) {
 	if result.SessionID != "sess-bridge" {
 		t.Fatalf("sessionId = %q, want sess-bridge", result.SessionID)
 	}
+	var fullResult map[string]any
+	response.ResultInto(t, &fullResult)
+	if _, ok := fullResult["configOptions"]; !ok {
+		t.Fatalf("result = %#v, want configOptions preserved", fullResult)
+	}
 	if runtime.called("session/new") != 1 {
 		t.Fatalf("session/new calls = %d, want 1", runtime.called("session/new"))
 	}
@@ -286,7 +291,7 @@ func (f *fakeRuntimeClient) Request(_ctx context.Context, method string, params 
 	}
 	switch method {
 	case "session/new":
-		return json.RawMessage(`{"sessionId":"sess-bridge"}`), nil
+		return json.RawMessage(`{"sessionId":"sess-bridge","configOptions":[{"id":"model","name":"Model","type":"select","currentValue":"fast","options":[{"value":"fast","name":"Fast"}]}],"modes":{"currentModeId":"ask"}}`), nil
 	case "session/prompt":
 		if f.childRequest {
 			f.events <- runtimejsonrpc.Event{

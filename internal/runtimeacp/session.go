@@ -18,7 +18,11 @@ type NewSessionParams struct {
 }
 
 type NewSessionResult struct {
-	SessionID string `json:"sessionId"`
+	SessionID     string            `json:"sessionId"`
+	ConfigOptions []json.RawMessage `json:"configOptions,omitempty"`
+	Modes         json.RawMessage   `json:"modes,omitempty"`
+
+	raw json.RawMessage
 }
 
 type LoadSessionParams struct {
@@ -123,14 +127,27 @@ type DeleteSessionParams struct {
 }
 
 func NewSession(ctx context.Context, client JSONRPCClient, params NewSessionParams) (NewSessionResult, error) {
-	var result NewSessionResult
-	if err := requestInto(ctx, client, "session/new", params, &result); err != nil {
+	resultData, err := requestRaw(ctx, client, "session/new", params)
+	if err != nil {
 		return NewSessionResult{}, err
+	}
+	var result NewSessionResult
+	if err := json.Unmarshal(resultData, &result); err != nil {
+		return NewSessionResult{}, fmt.Errorf("decode session/new result: %w", err)
 	}
 	if result.SessionID == "" {
 		return NewSessionResult{}, errors.New("session/new result missing sessionId")
 	}
+	result.raw = append(json.RawMessage(nil), resultData...)
 	return result, nil
+}
+
+func (r NewSessionResult) MarshalJSON() ([]byte, error) {
+	if len(r.raw) != 0 {
+		return append([]byte(nil), r.raw...), nil
+	}
+	type alias NewSessionResult
+	return json.Marshal(alias(r))
 }
 
 func Prompt(ctx context.Context, client JSONRPCClient, params PromptParams) (PromptResult, error) {

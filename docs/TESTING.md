@@ -47,6 +47,8 @@ runtime bridge.
 - ACP session lifecycle calls over the runtime JSON-RPC client: `session/new`,
   `session/prompt`, `session/cancel`, `session/close`, session updates, stop
   reasons, MCP server payloads, and RPC error propagation
+- `session/new` result preservation for runtime-provided `configOptions` and
+  legacy `modes`, so model/reasoning/mode selectors survive the bridge
 - ACP session load/resume/list/delete protocol calls, including replay updates,
   raw resume result preservation, listed session metadata, cursor parsing, and
   delete request forwarding
