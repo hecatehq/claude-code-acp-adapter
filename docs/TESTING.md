@@ -74,6 +74,8 @@ runtime bridge.
   `available_commands_update` and `config_option_update`
 - ACP bridge forwarding for runtime child requests that require client
   responses, including returning the client result to the child runtime
+- cancellation while awaiting a runtime child request, so a prompt can settle
+  as cancelled even when the client never answers the child request
 - ACP bridge forwarding for `authenticate` and `logout`
 - ACP bridge forwarding for `session/set_config_option` and legacy
   `session/set_mode`

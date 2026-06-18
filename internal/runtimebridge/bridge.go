@@ -210,12 +210,29 @@ func (b *Bridge) callWithEvents(ctx *acp.MethodContext, call func() (any, error)
 				return nil, mapRuntimeError(errors.New("runtime event stream closed"))
 			}
 			if len(event.ID) != 0 {
-				result, rpcErr, err := ctx.Request(event.Method, eventParams(event))
-				if err != nil {
-					return nil, mapRuntimeError(fmt.Errorf("forward runtime client request %s: %w", string(event.ID), err))
+				type clientRequestResult struct {
+					result json.RawMessage
+					rpcErr *acp.RPCError
+					err    error
 				}
-				if err := b.runtime.Respond(context.Background(), event.ID, result, runtimeError(rpcErr)); err != nil {
-					return nil, mapRuntimeError(fmt.Errorf("respond to runtime client request %s: %w", string(event.ID), err))
+				clientDone := make(chan clientRequestResult, 1)
+				go func() {
+					result, rpcErr, err := ctx.Request(event.Method, eventParams(event))
+					clientDone <- clientRequestResult{result: result, rpcErr: rpcErr, err: err}
+				}()
+				select {
+				case clientResult := <-clientDone:
+					if clientResult.err != nil {
+						return nil, mapRuntimeError(fmt.Errorf("forward runtime client request %s: %w", string(event.ID), clientResult.err))
+					}
+					if err := b.runtime.Respond(context.Background(), event.ID, clientResult.result, runtimeError(clientResult.rpcErr)); err != nil {
+						return nil, mapRuntimeError(fmt.Errorf("respond to runtime client request %s: %w", string(event.ID), err))
+					}
+				case result := <-done:
+					if result.err != nil {
+						return nil, mapRuntimeError(result.err)
+					}
+					return result.result, nil
 				}
 				continue
 			}

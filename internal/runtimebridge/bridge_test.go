@@ -1,9 +1,12 @@
 package runtimebridge_test
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"strings"
 	"sync"
 	"testing"
@@ -222,6 +225,53 @@ func TestPromptForwardsRuntimeChildRequestAndReturnsClientResponse(t *testing.T)
 	}
 	if !strings.Contains(string(response.result), "approved") {
 		t.Fatalf("runtime response result = %s, want approved", response.result)
+	}
+}
+
+func TestPromptCancelWhileAwaitingRuntimeChildRequest(t *testing.T) {
+	runtime := newFakeRuntimeClient()
+	runtime.childRequest = true
+	runtime.childRequestReturnsOnCancel = true
+
+	inputReader, inputWriter := io.Pipe()
+	outputReader, outputWriter := io.Pipe()
+	server := acp.NewServer(acp.AdapterInfo{Name: "test"}, runtimebridge.New(runtime).Options()...)
+	serveDone := make(chan error, 1)
+	go func() {
+		err := server.Serve(inputReader, outputWriter)
+		_ = outputWriter.Close()
+		serveDone <- err
+	}()
+	reader := bufio.NewReader(outputReader)
+
+	if _, err := fmt.Fprintln(inputWriter, `{"jsonrpc":"2.0","id":"prompt-1","method":"session/prompt","params":{"sessionId":"sess-bridge","prompt":[{"type":"text","text":"needs permission"}]}}`); err != nil {
+		t.Fatalf("write prompt: %v", err)
+	}
+	childRequest := readBridgeResponseLine(t, reader)
+	if childRequest.Method != "session/request_permission" {
+		t.Fatalf("child request method = %q, want session/request_permission", childRequest.Method)
+	}
+	if _, err := fmt.Fprintln(inputWriter, `{"jsonrpc":"2.0","method":"session/cancel","params":{"sessionId":"sess-bridge"}}`); err != nil {
+		t.Fatalf("write cancel: %v", err)
+	}
+	promptResponse := readBridgeResponseLine(t, reader)
+	var result struct {
+		StopReason string `json:"stopReason"`
+	}
+	promptResponse.ResultInto(t, &result)
+	if result.StopReason != "cancelled" {
+		t.Fatalf("stopReason = %q, want cancelled", result.StopReason)
+	}
+	if err := inputWriter.Close(); err != nil {
+		t.Fatalf("close input: %v", err)
+	}
+	select {
+	case err := <-serveDone:
+		if err != nil {
+			t.Fatalf("Serve returned error: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for server shutdown")
 	}
 }
 
@@ -521,20 +571,48 @@ func newBridgeClient(t testing.TB, runtime *fakeRuntimeClient) *acptest.Client {
 	return acptest.NewClient(t, server)
 }
 
+func readBridgeResponseLine(t testing.TB, reader *bufio.Reader) acptest.Response {
+	t.Helper()
+	lineCh := make(chan string, 1)
+	errCh := make(chan error, 1)
+	go func() {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			errCh <- err
+			return
+		}
+		lineCh <- line
+	}()
+	select {
+	case line := <-lineCh:
+		var response acptest.Response
+		if err := json.Unmarshal([]byte(line), &response); err != nil {
+			t.Fatalf("decode response %q: %v", line, err)
+		}
+		return response
+	case err := <-errCh:
+		t.Fatalf("read response: %v", err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for response")
+	}
+	return acptest.Response{}
+}
+
 type fakeRuntimeClient struct {
-	mu                     sync.Mutex
-	calls                  map[string]int
-	notifications          map[string]int
-	events                 chan runtimejsonrpc.Event
-	err                    error
-	childRequest           bool
-	blockPromptUntilCancel bool
-	cancelled              chan struct{}
-	newSessionUpdates      []json.RawMessage
-	promptUpdates          []json.RawMessage
-	closeUpdates           []json.RawMessage
-	responses              chan runtimeChildResponse
-	lastResponse           *runtimeChildResponse
+	mu                          sync.Mutex
+	calls                       map[string]int
+	notifications               map[string]int
+	events                      chan runtimejsonrpc.Event
+	err                         error
+	childRequest                bool
+	childRequestReturnsOnCancel bool
+	blockPromptUntilCancel      bool
+	cancelled                   chan struct{}
+	newSessionUpdates           []json.RawMessage
+	promptUpdates               []json.RawMessage
+	closeUpdates                []json.RawMessage
+	responses                   chan runtimeChildResponse
+	lastResponse                *runtimeChildResponse
 }
 
 func newFakeRuntimeClient() *fakeRuntimeClient {
@@ -579,7 +657,17 @@ func (f *fakeRuntimeClient) Request(_ctx context.Context, method string, params 
 				Method: "session/request_permission",
 				Params: json.RawMessage(`{"sessionId":"sess-bridge","toolCallId":"tool-1"}`),
 			}
-			<-f.responses
+			if f.childRequestReturnsOnCancel {
+				select {
+				case <-f.responses:
+				case <-f.cancelled:
+					return json.RawMessage(`{"stopReason":"cancelled"}`), nil
+				case <-time.After(2 * time.Second):
+					return nil, errors.New("timed out waiting for cancel or permission response")
+				}
+			} else {
+				<-f.responses
+			}
 			return json.RawMessage(`{"stopReason":"end_turn"}`), nil
 		}
 		if len(f.promptUpdates) != 0 {
