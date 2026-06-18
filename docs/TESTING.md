@@ -38,6 +38,9 @@ runtime bridge.
 - ACP session lifecycle calls over the runtime JSON-RPC client: `session/new`,
   `session/prompt`, `session/cancel`, `session/close`, session updates, stop
   reasons, MCP server payloads, and RPC error propagation
+- ACP server-to-runtime bridge behavior: handler param validation, session
+  method proxying, prompt update forwarding, cancel notifications, close
+  requests, and runtime RPC error mapping
 
 ## Not Covered Yet
 
@@ -89,3 +92,8 @@ Use `internal/runtimeacp` for ACP protocol lifecycle calls made to a
 subprocess-backed runtime. It should stay protocol-shaped and vendor-neutral;
 Claude Code-specific behavior belongs in the layer that maps Claude Code
 runtime semantics onto ACP.
+
+Use `internal/runtimebridge` to connect ACP server handlers to a
+subprocess-backed runtime client. It owns handler-level param decoding,
+runtime-error mapping, and forwarding runtime `session/update` notifications
+while a prompt request is active.

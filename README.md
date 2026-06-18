@@ -31,6 +31,7 @@ Implemented:
 - subprocess JSON-RPC client for ACP-style stdio runtime bridges
 - ACP initialize client for subprocess runtime negotiation
 - typed ACP session lifecycle calls for subprocess runtimes
+- ACP server-to-runtime bridge for session methods and streamed updates
 
 Not implemented yet:
 
