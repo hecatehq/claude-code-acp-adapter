@@ -228,6 +228,51 @@ func TestPromptForwardsRuntimeChildRequestAndReturnsClientResponse(t *testing.T)
 	}
 }
 
+func TestPromptForwardsRuntimeMCPChildRequestAndReturnsClientResponse(t *testing.T) {
+	runtime := newFakeRuntimeClient()
+	runtime.childRequest = true
+	runtime.childRequestMethod = "mcp/message"
+	runtime.childRequestParams = json.RawMessage(`{"connectionId":"mcp-conn","method":"tools/list","params":{"cursor":"next"}}`)
+	client := newBridgeClient(t, runtime)
+
+	envelopes := client.SendRaw(strings.Join([]string{
+		`{"jsonrpc":"2.0","id":"prompt-1","method":"session/prompt","params":{"sessionId":"sess-bridge","prompt":[{"type":"text","text":"needs tools"}]}}`,
+		`{"jsonrpc":"2.0","id":"server-1","result":{"tools":[{"name":"read"}]}}`,
+	}, "\n") + "\n")
+	if len(envelopes) != 2 {
+		t.Fatalf("got %d envelopes, want MCP child request + prompt response", len(envelopes))
+	}
+	if envelopes[0].Method != "mcp/message" {
+		t.Fatalf("child request method = %q, want mcp/message", envelopes[0].Method)
+	}
+	var params struct {
+		ConnectionID string `json:"connectionId"`
+		Method       string `json:"method"`
+		Params       struct {
+			Cursor string `json:"cursor"`
+		} `json:"params"`
+	}
+	envelopes[0].ParamsInto(t, &params)
+	if params.ConnectionID != "mcp-conn" || params.Method != "tools/list" || params.Params.Cursor != "next" {
+		t.Fatalf("MCP child request params = %#v", params)
+	}
+	var result struct {
+		StopReason string `json:"stopReason"`
+	}
+	envelopes[1].ResultInto(t, &result)
+	if result.StopReason != "end_turn" {
+		t.Fatalf("stopReason = %q, want end_turn", result.StopReason)
+	}
+
+	response := runtime.nextResponse(t)
+	if string(response.id) != `"runtime-child-1"` {
+		t.Fatalf("runtime response id = %s, want runtime-child-1", response.id)
+	}
+	if !strings.Contains(string(response.result), "tools") {
+		t.Fatalf("runtime response result = %s, want tools result", response.result)
+	}
+}
+
 func TestPromptCancelWhileAwaitingRuntimeChildRequest(t *testing.T) {
 	runtime := newFakeRuntimeClient()
 	runtime.childRequest = true
@@ -653,6 +698,8 @@ type fakeRuntimeClient struct {
 	events                      chan runtimejsonrpc.Event
 	err                         error
 	childRequest                bool
+	childRequestMethod          string
+	childRequestParams          json.RawMessage
 	childRequestReturnsOnCancel bool
 	blockPromptUntilCancel      bool
 	cancelled                   chan struct{}
@@ -700,10 +747,18 @@ func (f *fakeRuntimeClient) Request(_ctx context.Context, method string, params 
 			}
 		}
 		if f.childRequest {
+			method := f.childRequestMethod
+			if method == "" {
+				method = "session/request_permission"
+			}
+			params := f.childRequestParams
+			if len(params) == 0 {
+				params = json.RawMessage(`{"sessionId":"sess-bridge","toolCallId":"tool-1"}`)
+			}
 			f.events <- runtimejsonrpc.Event{
 				ID:     json.RawMessage(`"runtime-child-1"`),
-				Method: "session/request_permission",
-				Params: json.RawMessage(`{"sessionId":"sess-bridge","toolCallId":"tool-1"}`),
+				Method: method,
+				Params: append(json.RawMessage(nil), params...),
 			}
 			if f.childRequestReturnsOnCancel {
 				select {
