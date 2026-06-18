@@ -379,6 +379,27 @@ func TestPromptCanBeCancelledByClientRequest(t *testing.T) {
 	}
 }
 
+func TestPromptProtocolCancelCancelsRuntimeRequestContext(t *testing.T) {
+	runtime := newFakeRuntimeClient()
+	runtime.blockPromptUntilContextCancel = true
+	client := newBridgeClient(t, runtime)
+
+	envelopes := client.SendRaw(strings.Join([]string{
+		`{"jsonrpc":"2.0","id":"prompt-1","method":"session/prompt","params":{"sessionId":"sess-bridge","prompt":[{"type":"text","text":"keep going"}]}}`,
+		`{"jsonrpc":"2.0","method":"$/cancel_request","params":{"requestId":"prompt-1"}}`,
+	}, "\n") + "\n")
+	if len(envelopes) != 1 {
+		t.Fatalf("got %d envelopes, want cancelled prompt response", len(envelopes))
+	}
+	var result struct {
+		StopReason string `json:"stopReason"`
+	}
+	envelopes[0].ResultInto(t, &result)
+	if result.StopReason != "cancelled" {
+		t.Fatalf("stopReason = %q, want cancelled", result.StopReason)
+	}
+}
+
 func TestLoadSessionForwardsReplayBeforeResponse(t *testing.T) {
 	runtime := newFakeRuntimeClient()
 	client := newBridgeClient(t, runtime)
@@ -876,26 +897,27 @@ func readBridgeResponseLine(t testing.TB, reader *bufio.Reader) acptest.Response
 }
 
 type fakeRuntimeClient struct {
-	mu                          sync.Mutex
-	calls                       map[string]int
-	notifications               map[string]int
-	notificationParams          map[string]json.RawMessage
-	events                      chan runtimejsonrpc.Event
-	err                         error
-	childRequest                bool
-	childRequestMethod          string
-	childRequestParams          json.RawMessage
-	childRequestReturnsOnCancel bool
-	blockPromptUntilCancel      bool
-	cancelled                   chan struct{}
-	newSessionUpdates           []json.RawMessage
-	promptUpdates               []json.RawMessage
-	resumeUpdates               []json.RawMessage
-	closeUpdates                []json.RawMessage
-	configOptionUpdates         []json.RawMessage
-	modeUpdates                 []json.RawMessage
-	responses                   chan runtimeChildResponse
-	lastResponse                *runtimeChildResponse
+	mu                            sync.Mutex
+	calls                         map[string]int
+	notifications                 map[string]int
+	notificationParams            map[string]json.RawMessage
+	events                        chan runtimejsonrpc.Event
+	err                           error
+	childRequest                  bool
+	childRequestMethod            string
+	childRequestParams            json.RawMessage
+	childRequestReturnsOnCancel   bool
+	blockPromptUntilCancel        bool
+	blockPromptUntilContextCancel bool
+	cancelled                     chan struct{}
+	newSessionUpdates             []json.RawMessage
+	promptUpdates                 []json.RawMessage
+	resumeUpdates                 []json.RawMessage
+	closeUpdates                  []json.RawMessage
+	configOptionUpdates           []json.RawMessage
+	modeUpdates                   []json.RawMessage
+	responses                     chan runtimeChildResponse
+	lastResponse                  *runtimeChildResponse
 }
 
 func newFakeRuntimeClient() *fakeRuntimeClient {
@@ -909,7 +931,7 @@ func newFakeRuntimeClient() *fakeRuntimeClient {
 	}
 }
 
-func (f *fakeRuntimeClient) Request(_ctx context.Context, method string, params any) (json.RawMessage, error) {
+func (f *fakeRuntimeClient) Request(ctx context.Context, method string, params any) (json.RawMessage, error) {
 	f.mu.Lock()
 	f.calls[method]++
 	err := f.err
@@ -927,6 +949,14 @@ func (f *fakeRuntimeClient) Request(_ctx context.Context, method string, params 
 		}
 		return json.RawMessage(`{"sessionId":"sess-bridge","configOptions":[{"id":"model","name":"Model","type":"select","currentValue":"fast","options":[{"value":"fast","name":"Fast"}]}],"modes":{"currentModeId":"ask"}}`), nil
 	case "session/prompt":
+		if f.blockPromptUntilContextCancel {
+			select {
+			case <-ctx.Done():
+				return json.RawMessage(`{"stopReason":"cancelled"}`), nil
+			case <-time.After(2 * time.Second):
+				return nil, errors.New("timed out waiting for request context cancellation")
+			}
+		}
 		if f.blockPromptUntilCancel {
 			select {
 			case <-f.cancelled:
