@@ -35,6 +35,9 @@ runtime bridge.
 - ACP initialize negotiation over the runtime JSON-RPC client, including client
   info/capabilities, agent capability parsing, protocol-version mismatch, and
   runtime RPC error propagation
+- ACP session lifecycle calls over the runtime JSON-RPC client: `session/new`,
+  `session/prompt`, `session/cancel`, `session/close`, session updates, stop
+  reasons, MCP server payloads, and RPC error propagation
 
 ## Not Covered Yet
 
