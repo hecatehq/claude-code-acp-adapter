@@ -309,6 +309,52 @@ func TestCloseSessionProxiesToRuntime(t *testing.T) {
 	}
 }
 
+func TestCloseSessionForwardsRuntimeUpdatesBeforeResponse(t *testing.T) {
+	runtime := newFakeRuntimeClient()
+	runtime.events = make(chan runtimejsonrpc.Event)
+	runtime.closeUpdates = []json.RawMessage{
+		json.RawMessage(`{"sessionId":"sess-bridge","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"closing"}}}`),
+	}
+	client := newBridgeClient(t, runtime)
+
+	responsesCh := make(chan []acptest.Response, 1)
+	go func() {
+		responsesCh <- client.Send(map[string]any{
+			"jsonrpc": "2.0",
+			"id":      "close-1",
+			"method":  "session/close",
+			"params":  map[string]any{"sessionId": "sess-bridge"},
+		})
+	}()
+
+	var envelopes []acptest.Response
+	select {
+	case envelopes = <-responsesCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for session/close response; bridge did not drain runtime update")
+	}
+	if len(envelopes) != 2 {
+		t.Fatalf("got %d envelopes, want close update + response", len(envelopes))
+	}
+	var update struct {
+		SessionID string `json:"sessionId"`
+		Update    struct {
+			SessionUpdate string `json:"sessionUpdate"`
+			Content       struct {
+				Text string `json:"text"`
+			} `json:"content"`
+		} `json:"update"`
+	}
+	envelopes[0].ParamsInto(t, &update)
+	if update.SessionID != "sess-bridge" ||
+		update.Update.SessionUpdate != "agent_message_chunk" ||
+		update.Update.Content.Text != "closing" {
+		t.Fatalf("close update = %#v", update)
+	}
+	var result map[string]any
+	envelopes[1].ResultInto(t, &result)
+}
+
 func TestDeleteSessionProxiesToRuntime(t *testing.T) {
 	runtime := newFakeRuntimeClient()
 	client := newBridgeClient(t, runtime)
@@ -424,6 +470,7 @@ type fakeRuntimeClient struct {
 	childRequest      bool
 	newSessionUpdates []json.RawMessage
 	promptUpdates     []json.RawMessage
+	closeUpdates      []json.RawMessage
 	responses         chan runtimeChildResponse
 	lastResponse      *runtimeChildResponse
 }
@@ -489,6 +536,12 @@ func (f *fakeRuntimeClient) Request(_ctx context.Context, method string, params 
 	case "session/list":
 		return json.RawMessage(`{"sessions":[{"sessionId":"sess-bridge","cwd":"/tmp/project","title":"Bridge session"}],"nextCursor":"next"}`), nil
 	case "session/close":
+		for _, params := range f.closeUpdates {
+			f.events <- runtimejsonrpc.Event{
+				Method: "session/update",
+				Params: append(json.RawMessage(nil), params...),
+			}
+		}
 		return json.RawMessage(`{}`), nil
 	case "session/delete":
 		return json.RawMessage(`{}`), nil

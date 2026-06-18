@@ -61,6 +61,8 @@ runtime bridge.
   requests, and runtime RPC error mapping
 - ACP bridge forwarding for setup-time `session/update` notifications emitted
   before `session/new` responds
+- ACP bridge forwarding for close-time `session/update` notifications emitted
+  before `session/close` responds
 - ACP server-to-runtime bridge coverage for session load, resume, list, and
   delete methods
 - ACP bridge forwarding for dynamic `session/update` payloads such as

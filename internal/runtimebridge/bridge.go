@@ -163,15 +163,17 @@ func (b *Bridge) cancelNotification(params json.RawMessage) error {
 	return runtimeacp.Cancel(context.Background(), b.runtime, req)
 }
 
-func (b *Bridge) closeSession(_ *acp.MethodContext, params json.RawMessage) (any, *acp.RPCError) {
+func (b *Bridge) closeSession(ctx *acp.MethodContext, params json.RawMessage) (any, *acp.RPCError) {
 	var req runtimeacp.CloseSessionParams
 	if rpcErr := decodeParams(params, &req); rpcErr != nil {
 		return nil, rpcErr
 	}
-	if err := runtimeacp.CloseSession(context.Background(), b.runtime, req); err != nil {
-		return nil, mapRuntimeError(err)
-	}
-	return map[string]any{}, nil
+	return b.callWithEvents(ctx, func() (any, error) {
+		if err := runtimeacp.CloseSession(context.Background(), b.runtime, req); err != nil {
+			return nil, err
+		}
+		return map[string]any{}, nil
+	})
 }
 
 func (b *Bridge) deleteSession(_ *acp.MethodContext, params json.RawMessage) (any, *acp.RPCError) {
