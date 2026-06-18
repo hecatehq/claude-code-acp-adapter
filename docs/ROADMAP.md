@@ -27,6 +27,7 @@
 - use `internal/runtimeproc` as the only process-backed runtime launcher
 - use `internal/runtimejsonrpc` for newline-delimited JSON-RPC over runtime
   stdio
+- use `internal/runtimeacp` for subprocess ACP lifecycle negotiation
 - keep `doctor` green against the target Claude Code binary before enabling
   real runtime sessions
 - choose a stable Claude Code / Claude Agent SDK integration boundary

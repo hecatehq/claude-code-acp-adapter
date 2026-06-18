@@ -32,6 +32,9 @@ runtime bridge.
 - runtime JSON-RPC client request/response matching, notifications, child
   events, error responses, malformed stdout failure, and request timeout
   cleanup
+- ACP initialize negotiation over the runtime JSON-RPC client, including client
+  info/capabilities, agent capability parsing, protocol-version mismatch, and
+  runtime RPC error propagation
 
 ## Not Covered Yet
 
@@ -78,3 +81,8 @@ Use `internal/runtimejsonrpc` for newline-delimited JSON-RPC over a launched
 runtime process. It owns request IDs, pending response matching, child
 notification delivery, and protocol decode failures; higher layers should keep
 Claude Code-specific ACP mapping outside this transport client.
+
+Use `internal/runtimeacp` for ACP protocol lifecycle calls made to a
+subprocess-backed runtime. It should stay protocol-shaped and vendor-neutral;
+Claude Code-specific behavior belongs in the layer that maps Claude Code
+runtime semantics onto ACP.
