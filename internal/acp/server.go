@@ -30,6 +30,7 @@ type Server struct {
 	initialize        any
 	initializeHandler InitializeHandler
 	methods           map[string]MethodHandler
+	concurrent        map[string]bool
 	notifications     map[string]NotificationHandler
 }
 
@@ -86,6 +87,13 @@ func WithMethod(method string, handler MethodHandler) Option {
 	}
 }
 
+func WithConcurrentMethod(method string, handler MethodHandler) Option {
+	return func(s *Server) {
+		s.methods[method] = handler
+		s.concurrent[method] = true
+	}
+}
+
 func WithNotification(method string, handler NotificationHandler) Option {
 	return func(s *Server) {
 		s.notifications[method] = handler
@@ -108,6 +116,7 @@ func NewServer(info AdapterInfo, opts ...Option) *Server {
 	server := &Server{
 		info:          info,
 		methods:       map[string]MethodHandler{},
+		concurrent:    map[string]bool{},
 		notifications: map[string]NotificationHandler{},
 	}
 	for _, opt := range opts {
@@ -155,6 +164,15 @@ func (s *Server) Serve(input io.Reader, output io.Writer) error {
 			sendHandlerErr(conn.write(s.handle(ctx, req)))
 		}
 	}()
+	var concurrent sync.WaitGroup
+	runConcurrent := func(req request) {
+		concurrent.Add(1)
+		go func() {
+			defer concurrent.Done()
+			ctx := &MethodContext{conn: conn}
+			sendHandlerErr(conn.write(s.handle(ctx, req)))
+		}()
+	}
 
 	for {
 		msg, ok, err := conn.readMessage()
@@ -195,6 +213,10 @@ func (s *Server) Serve(input io.Reader, output io.Writer) error {
 			Method:  msg.Method,
 			Params:  msg.Params,
 		}
+		if s.concurrent[msg.Method] {
+			runConcurrent(req)
+			continue
+		}
 		methods.push(req)
 	}
 	methods.close()
@@ -203,6 +225,16 @@ func (s *Server) Serve(input io.Reader, output io.Writer) error {
 	case err := <-handlerErr:
 		return err
 	case <-methodsDone:
+	}
+	concurrentDone := make(chan struct{})
+	go func() {
+		concurrent.Wait()
+		close(concurrentDone)
+	}()
+	select {
+	case err := <-handlerErr:
+		return err
+	case <-concurrentDone:
 	}
 	select {
 	case err := <-handlerErr:

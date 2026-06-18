@@ -256,6 +256,56 @@ func TestNotificationDispatchesWhileMethodIsRunning(t *testing.T) {
 	}
 }
 
+func TestConcurrentMethodDispatchesWhileMethodIsRunning(t *testing.T) {
+	cancelled := make(chan struct{})
+	server := NewServer(
+		AdapterInfo{Name: "claude-code-acp-adapter"},
+		WithMethod("session/prompt", func(_ *MethodContext, _ json.RawMessage) (any, *RPCError) {
+			select {
+			case <-cancelled:
+				return map[string]any{"stopReason": "cancelled"}, nil
+			case <-time.After(250 * time.Millisecond):
+				return nil, &RPCError{Code: -32000, Message: "cancel was not dispatched"}
+			}
+		}),
+		WithConcurrentMethod("session/cancel", func(_ *MethodContext, _ json.RawMessage) (any, *RPCError) {
+			close(cancelled)
+			return map[string]any{"cancelled": true}, nil
+		}),
+	)
+
+	var out bytes.Buffer
+	err := server.Serve(strings.NewReader(strings.Join([]string{
+		`{"jsonrpc":"2.0","id":"prompt","method":"session/prompt","params":{"sessionId":"s1"}}`,
+		`{"jsonrpc":"2.0","id":"cancel","method":"session/cancel","params":{"sessionId":"s1"}}`,
+	}, "\n")+"\n"), &out)
+	if err != nil {
+		t.Fatalf("Serve returned error: %v", err)
+	}
+	envelopes := decodeServerEnvelopes(t, out.Bytes())
+	if len(envelopes) != 2 {
+		t.Fatalf("got %d envelopes, want cancel + prompt responses\n%s", len(envelopes), out.String())
+	}
+	byID := map[string]serverEnvelope{}
+	for _, envelope := range envelopes {
+		byID[string(envelope.ID)] = envelope
+	}
+	var cancelResult map[string]any
+	if err := json.Unmarshal(byID[`"cancel"`].Result, &cancelResult); err != nil {
+		t.Fatalf("decode cancel result: %v", err)
+	}
+	if cancelResult["cancelled"] != true {
+		t.Fatalf("cancel result = %#v, want cancelled", cancelResult)
+	}
+	var promptResult map[string]any
+	if err := json.Unmarshal(byID[`"prompt"`].Result, &promptResult); err != nil {
+		t.Fatalf("decode prompt result: %v", err)
+	}
+	if promptResult["stopReason"] != "cancelled" {
+		t.Fatalf("prompt result = %#v, want cancelled", promptResult)
+	}
+}
+
 func TestNotificationDispatchesAfterBurstOfQueuedMethods(t *testing.T) {
 	cancelled := make(chan struct{})
 	server := NewServer(

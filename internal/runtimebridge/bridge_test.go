@@ -249,6 +249,41 @@ func TestPromptCanBeCancelledByClientNotification(t *testing.T) {
 	}
 }
 
+func TestPromptCanBeCancelledByClientRequest(t *testing.T) {
+	runtime := newFakeRuntimeClient()
+	runtime.blockPromptUntilCancel = true
+	client := newBridgeClient(t, runtime)
+
+	envelopes := client.SendRaw(strings.Join([]string{
+		`{"jsonrpc":"2.0","id":"prompt-1","method":"session/prompt","params":{"sessionId":"sess-bridge","prompt":[{"type":"text","text":"keep going"}]}}`,
+		`{"jsonrpc":"2.0","id":"cancel-1","method":"session/cancel","params":{"sessionId":"sess-bridge"}}`,
+	}, "\n") + "\n")
+	if len(envelopes) != 2 {
+		t.Fatalf("got %d envelopes, want cancel response + cancelled prompt response", len(envelopes))
+	}
+	byID := map[string]acptest.Response{}
+	for _, envelope := range envelopes {
+		byID[string(envelope.ID)] = envelope
+	}
+	var cancelResult struct {
+		Cancelled bool `json:"cancelled"`
+	}
+	byID[`"cancel-1"`].ResultInto(t, &cancelResult)
+	if !cancelResult.Cancelled {
+		t.Fatal("cancelled = false, want true")
+	}
+	var promptResult struct {
+		StopReason string `json:"stopReason"`
+	}
+	byID[`"prompt-1"`].ResultInto(t, &promptResult)
+	if promptResult.StopReason != "cancelled" {
+		t.Fatalf("stopReason = %q, want cancelled", promptResult.StopReason)
+	}
+	if runtime.notified("session/cancel") != 1 {
+		t.Fatalf("session/cancel notifications = %d, want 1", runtime.notified("session/cancel"))
+	}
+}
+
 func TestLoadSessionForwardsReplayBeforeResponse(t *testing.T) {
 	runtime := newFakeRuntimeClient()
 	client := newBridgeClient(t, runtime)

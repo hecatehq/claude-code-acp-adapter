@@ -16,8 +16,9 @@ runtime bridge.
 - request ID preservation
 - server-to-client JSON-RPC requests from handlers, including successful
   client responses and client RPC errors
-- in-flight client notification dispatch while a request handler is running,
-  including prompt cancellation through the runtime bridge
+- in-flight client notification and concurrent cancel-request dispatch while a
+  request handler is running, including prompt cancellation through the runtime
+  bridge
 - ordered ACP method execution without blocking notification dispatch behind a
   burst of queued method requests
 - malformed JSON errors without stopping later requests
