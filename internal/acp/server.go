@@ -284,7 +284,20 @@ func (s *Server) handle(ctx *MethodContext, req request) response {
 			},
 			AuthMethods: []authMethod{},
 		})
-	case "session/new", "session/load", "session/resume", "session/list", "session/prompt", "session/cancel", "session/close":
+	case "authenticate",
+		"logout",
+		"mcp/message",
+		"session/new",
+		"session/fork",
+		"session/load",
+		"session/resume",
+		"session/list",
+		"session/set_config_option",
+		"session/set_mode",
+		"session/prompt",
+		"session/cancel",
+		"session/close",
+		"session/delete":
 		if handler := s.methods[req.Method]; handler != nil {
 			result, rpcErr := handler(ctx, req.Params)
 			if rpcErr != nil {

@@ -3,6 +3,7 @@ package acp
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -119,24 +120,45 @@ func TestInitializeHandlerReceivesClientParams(t *testing.T) {
 	}
 }
 
-func TestPromptReturnsStructuredNotImplemented(t *testing.T) {
-	server := NewServer(AdapterInfo{Name: "claude-code-acp-adapter"})
+func TestKnownMethodsReturnStructuredNotImplemented(t *testing.T) {
+	methods := []string{
+		"authenticate",
+		"logout",
+		"mcp/message",
+		"session/new",
+		"session/fork",
+		"session/load",
+		"session/resume",
+		"session/list",
+		"session/set_config_option",
+		"session/set_mode",
+		"session/prompt",
+		"session/cancel",
+		"session/close",
+		"session/delete",
+	}
+	for _, method := range methods {
+		t.Run(method, func(t *testing.T) {
+			server := NewServer(AdapterInfo{Name: "claude-code-acp-adapter"})
 
-	var out bytes.Buffer
-	err := server.Serve(strings.NewReader(`{"jsonrpc":"2.0","id":"p1","method":"session/prompt"}`+"\n"), &out)
-	if err != nil {
-		t.Fatalf("Serve returned error: %v", err)
-	}
+			var out bytes.Buffer
+			input := fmt.Sprintf(`{"jsonrpc":"2.0","id":"p1","method":%q}`+"\n", method)
+			err := server.Serve(strings.NewReader(input), &out)
+			if err != nil {
+				t.Fatalf("Serve returned error: %v", err)
+			}
 
-	var got response
-	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	if got.Error == nil {
-		t.Fatal("expected error")
-	}
-	if got.Error.Code != -32004 {
-		t.Fatalf("error code = %d, want -32004", got.Error.Code)
+			var got response
+			if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+				t.Fatalf("decode response: %v", err)
+			}
+			if got.Error == nil {
+				t.Fatal("expected error")
+			}
+			if got.Error.Code != -32004 {
+				t.Fatalf("error code = %d, want -32004", got.Error.Code)
+			}
+		})
 	}
 }
 
