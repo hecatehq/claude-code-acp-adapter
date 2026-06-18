@@ -48,6 +48,39 @@ func TestNoArgsStartsACPStdio(t *testing.T) {
 	if response["result"] == nil {
 		t.Fatalf("response missing result: %#v", response)
 	}
+	var result struct {
+		AgentInfo struct {
+			Name    string `json:"name"`
+			Title   string `json:"title"`
+			Version string `json:"version"`
+		} `json:"agentInfo"`
+		AgentCapabilities struct {
+			PromptCapabilities struct {
+				Image           bool `json:"image"`
+				EmbeddedContext bool `json:"embeddedContext"`
+			} `json:"promptCapabilities"`
+			MCPCapabilities struct {
+				HTTP bool `json:"http"`
+				SSE  bool `json:"sse,omitempty"`
+			} `json:"mcpCapabilities"`
+		} `json:"agentCapabilities"`
+	}
+	rawResult, err := json.Marshal(response["result"])
+	if err != nil {
+		t.Fatalf("marshal initialize result: %v", err)
+	}
+	if err := json.Unmarshal(rawResult, &result); err != nil {
+		t.Fatalf("decode initialize result: %v\n%s", err, rawResult)
+	}
+	if result.AgentInfo.Name != "claude-code-acp-adapter" || result.AgentInfo.Title != "Claude Code ACP Adapter" {
+		t.Fatalf("agent info = %#v, want Claude adapter metadata", result.AgentInfo)
+	}
+	if !result.AgentCapabilities.PromptCapabilities.Image || !result.AgentCapabilities.PromptCapabilities.EmbeddedContext {
+		t.Fatalf("prompt capabilities = %#v, want image + embedded context", result.AgentCapabilities.PromptCapabilities)
+	}
+	if !result.AgentCapabilities.MCPCapabilities.HTTP || !result.AgentCapabilities.MCPCapabilities.SSE {
+		t.Fatalf("mcp capabilities = %#v, want HTTP + SSE", result.AgentCapabilities.MCPCapabilities)
+	}
 }
 
 func TestRuntimeFlagsStartProcessBackedACPBridge(t *testing.T) {
@@ -391,4 +424,112 @@ func TestDoctorCommandReportsFailureWithoutUsage(t *testing.T) {
 	if strings.Contains(stderr.String(), "Usage:") {
 		t.Fatalf("stderr = %q, want no usage", stderr.String())
 	}
+}
+
+func TestDoctorCommandUsesClaudeDefaults(t *testing.T) {
+	cmd := newRootCommand(nil, &bytes.Buffer{}, &bytes.Buffer{})
+	doctorCmd, _, err := cmd.Find([]string{"doctor"})
+	if err != nil {
+		t.Fatalf("find doctor command: %v", err)
+	}
+	if got := doctorCmd.Flags().Lookup("binary").DefValue; got != "claude" {
+		t.Fatalf("doctor binary default = %q, want claude", got)
+	}
+}
+
+func TestDoctorCommandJSONReportsClaudeEnvironment(t *testing.T) {
+	t.Setenv("GO_WANT_APP_DOCTOR_HELPER", "1")
+	t.Setenv("ANTHROPIC_API_KEY", "sk-ant-app-doctor")
+	t.Setenv("CLAUDE_CONFIG_DIR", "/tmp/claude-app-doctor")
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := Run([]string{
+		"doctor",
+		"--binary", os.Args[0],
+		"--version-arg=-test.run=TestAppDoctorHelper",
+		"--version-arg=--",
+		"--version-arg=app-doctor-helper",
+		"--json",
+	}, nil, &stdout, &stderr)
+
+	if code != 0 {
+		t.Fatalf("Run returned %d, want 0; stderr=%q stdout=%q", code, stderr.String(), stdout.String())
+	}
+	var payload struct {
+		OK     bool `json:"ok"`
+		Report struct {
+			VersionStdout string `json:"version_stdout"`
+			Environment   []struct {
+				Name      string `json:"name"`
+				Present   bool   `json:"present"`
+				Sensitive bool   `json:"sensitive"`
+			} `json:"environment"`
+		} `json:"report"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &payload); err != nil {
+		t.Fatalf("decode doctor JSON: %v\n%s", err, stdout.String())
+	}
+	if !payload.OK {
+		t.Fatalf("doctor payload OK = false: %#v", payload)
+	}
+	if strings.Contains(payload.Report.VersionStdout, "sk-ant-app-doctor") {
+		t.Fatalf("doctor stdout leaked secret: %q", payload.Report.VersionStdout)
+	}
+	if !envPresentAndSensitive(payload.Report.Environment, "ANTHROPIC_API_KEY") {
+		t.Fatalf("ANTHROPIC_API_KEY status missing or not sensitive: %#v", payload.Report.Environment)
+	}
+	if !envPresent(payload.Report.Environment, "CLAUDE_CONFIG_DIR") {
+		t.Fatalf("CLAUDE_CONFIG_DIR status missing: %#v", payload.Report.Environment)
+	}
+	if !envNamed(payload.Report.Environment, "ANTHROPIC_BASE_URL") {
+		t.Fatalf("ANTHROPIC_BASE_URL status missing: %#v", payload.Report.Environment)
+	}
+}
+
+func TestAppDoctorHelper(t *testing.T) {
+	if os.Getenv("GO_WANT_APP_DOCTOR_HELPER") != "1" || !hasArg(os.Args, "app-doctor-helper") {
+		return
+	}
+	fmt.Printf("fake-claude 1.2.3 token=%s\n", os.Getenv("ANTHROPIC_API_KEY"))
+	os.Exit(0)
+}
+
+func envPresentAndSensitive(statuses []struct {
+	Name      string `json:"name"`
+	Present   bool   `json:"present"`
+	Sensitive bool   `json:"sensitive"`
+}, name string) bool {
+	for _, status := range statuses {
+		if status.Name == name {
+			return status.Present && status.Sensitive
+		}
+	}
+	return false
+}
+
+func envPresent(statuses []struct {
+	Name      string `json:"name"`
+	Present   bool   `json:"present"`
+	Sensitive bool   `json:"sensitive"`
+}, name string) bool {
+	for _, status := range statuses {
+		if status.Name == name {
+			return status.Present
+		}
+	}
+	return false
+}
+
+func envNamed(statuses []struct {
+	Name      string `json:"name"`
+	Present   bool   `json:"present"`
+	Sensitive bool   `json:"sensitive"`
+}, name string) bool {
+	for _, status := range statuses {
+		if status.Name == name {
+			return true
+		}
+	}
+	return false
 }

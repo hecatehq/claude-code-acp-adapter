@@ -8,11 +8,11 @@ import (
 	"strings"
 
 	"github.com/hecatehq/acp-adapter-kit/acp"
+	"github.com/hecatehq/acp-adapter-kit/doctor"
 	"github.com/hecatehq/acp-adapter-kit/runtimeacp"
 	"github.com/hecatehq/acp-adapter-kit/runtimebridge"
 	"github.com/hecatehq/acp-adapter-kit/runtimehost"
 	"github.com/hecatehq/acp-adapter-kit/runtimeproc"
-	"github.com/hecatehq/claude-code-acp-adapter/internal/doctor"
 	"github.com/spf13/cobra"
 )
 

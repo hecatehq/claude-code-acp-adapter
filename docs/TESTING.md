@@ -113,6 +113,9 @@ runtime bridge.
 - runtime host composition: subprocess launch, ACP initialize handshake,
   initialize result retention, bridge option exposure, prompt update forwarding,
   and protocol-version mismatch cleanup
+- root ACP scaffold initialize metadata and capabilities for this adapter
+- root `doctor` command Claude binary default, JSON report shape, and Claude
+  environment status list
 - root ACP runtime flags: opt-in subprocess-backed serving, deferred runtime
   startup with forwarded client initialize capabilities, required absolute
   runtime workdir, runtime argv passthrough, and default scaffold behavior when
@@ -151,41 +154,21 @@ adapter to this one:
 
 ## Test Strategy
 
-Use `internal/acptest` for all protocol-level tests. It drives the real stdio
-JSON-RPC path, so fake runtime tests exercise the same transport Hecate and
-other ACP hosts will use.
+Use [acp-adapter-kit](https://github.com/hecatehq/acp-adapter-kit) for
+provider-neutral protocol/runtime/process tests. The kit owns ACP transport
+conformance, subprocess safety, JSON-RPC request/cancel behavior, runtime ACP
+DTO parity, runtime bridge forwarding, runtime host composition, fake-runtime
+fixtures, and generic doctor-runner behavior.
 
-Use `internal/process` for every subprocess boundary. Its tests pin the
-security contract before real Claude Code integration lands. Use `Run` for
-bounded one-shot probes and `Start` for long-lived runtime sessions that need
-stdio pipes.
+Keep this repository's tests focused on Claude Code-specific adapter behavior:
 
-Use `internal/doctor` for local runtime readiness checks. Its tests use the Go
-test binary as a fake Claude Code executable so command probing stays
-deterministic and does not require a real Claude Code install.
+- CLI version and no-argument ACP stdio behavior;
+- scaffold `initialize` metadata and Claude capability flags;
+- `doctor` command defaults for the Claude binary and Claude environment list;
+- runtime flag wiring from Cobra into the shared runtime host;
+- Claude-specific prompt, tool, permission, config, model, MCP, auth, and
+  session mapping as those features land.
 
-Use `internal/runtimeproc` for the process-backed runtime boundary. It is the
-only place that should decide the default Claude Code executable, allowed
-inherited environment, and launch-time stdio process wiring.
-
-Use `internal/runtimejsonrpc` for newline-delimited JSON-RPC over a launched
-runtime process. It owns request IDs, pending response matching, child
-notification delivery, and protocol decode failures; higher layers should keep
-Claude Code-specific ACP mapping outside this transport client.
-
-Use `internal/runtimeacp` for ACP protocol lifecycle calls made to a
-subprocess-backed runtime. It should stay protocol-shaped and vendor-neutral;
-Claude Code-specific behavior belongs in the layer that maps Claude Code
-runtime semantics onto ACP. When adopting `github.com/coder/acp-go-sdk` types,
-add parity tests for the exact JSON shape before replacing hand-written DTOs.
-
-Use `internal/runtimebridge` to connect ACP server handlers to a
-subprocess-backed runtime client. It owns handler-level param decoding,
-runtime-error mapping, and forwarding runtime `session/update` notifications
-while a prompt request is active.
-
-Use `internal/runtimehost` as the composition boundary for real runtime
-sessions. It owns launching the subprocess-backed client, sending the ACP
-`initialize` handshake with adapter identity/capabilities, retaining the
-runtime's initialize result, exposing the bridge's ACP handler options, and
-force-closing the child during cleanup.
+Do not recreate kit packages under `internal/`. Add reusable protocol/runtime
+coverage to `acp-adapter-kit`, then update this adapter to the new kit version
+and add only Claude-specific integration assertions here.
