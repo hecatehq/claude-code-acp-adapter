@@ -24,6 +24,7 @@
 ## Phase 3: Claude Code Runtime Bridge
 
 - use `internal/process` for every subprocess boundary
+- use `internal/runtimeproc` as the only process-backed runtime launcher
 - keep `doctor` green against the target Claude Code binary before enabling
   real runtime sessions
 - choose a stable Claude Code / Claude Agent SDK integration boundary
