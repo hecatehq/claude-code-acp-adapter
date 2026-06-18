@@ -34,6 +34,27 @@ func TestMCPMessageReturnsRawRuntimeResult(t *testing.T) {
 	}
 }
 
+func TestNotifyMCPMessageForwardsNotification(t *testing.T) {
+	client := &recordingACPNotifier{}
+
+	err := runtimeacp.NotifyMCPMessage(context.Background(), client, runtimeacp.MCPMessageParams{
+		ConnectionID: "mcp-conn",
+		Method:       "notifications/initialized",
+		Params:       json.RawMessage(`{"ok":true}`),
+	})
+	if err != nil {
+		t.Fatalf("NotifyMCPMessage returned error: %v", err)
+	}
+	if client.method != "mcp/message" {
+		t.Fatalf("method = %q, want mcp/message", client.method)
+	}
+	var params runtimeacp.MCPMessageParams
+	mustJSONRoundTrip(t, client.params, &params)
+	if params.ConnectionID != "mcp-conn" || params.Method != "notifications/initialized" || string(params.Params) != `{"ok":true}` {
+		t.Fatalf("params = %#v, want MCP notification payload preserved", params)
+	}
+}
+
 func TestACPMCPServerPreservesIDAndMeta(t *testing.T) {
 	client := &recordingACPClient{result: json.RawMessage(`{"sessionId":"sess-test"}`)}
 
@@ -61,4 +82,15 @@ func TestACPMCPServerPreservesIDAndMeta(t *testing.T) {
 	if !reflect.DeepEqual(server.Meta, map[string]any{"owner": "client"}) {
 		t.Fatalf("mcp server meta = %#v, want owner client", server.Meta)
 	}
+}
+
+type recordingACPNotifier struct {
+	method string
+	params any
+}
+
+func (n *recordingACPNotifier) Notify(_ context.Context, method string, params any) error {
+	n.method = method
+	n.params = params
+	return nil
 }

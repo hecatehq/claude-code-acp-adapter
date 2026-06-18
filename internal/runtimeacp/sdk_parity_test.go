@@ -118,6 +118,21 @@ func TestMCPMessageParamsMatchCoderSDKJSONShape(t *testing.T) {
 	)
 }
 
+func TestMCPMessageNotificationParamsMatchCoderSDKJSONShape(t *testing.T) {
+	assertSameJSONShape(t,
+		runtimeacp.MCPMessageParams{
+			ConnectionID: "mcp-conn",
+			Method:       "notifications/initialized",
+			Params:       json.RawMessage(`{"ok":true}`),
+		},
+		sdk.UnstableMessageMcpNotification{
+			ConnectionId: sdk.UnstableMcpConnectionId("mcp-conn"),
+			Method:       "notifications/initialized",
+			Params:       map[string]any{"ok": true},
+		},
+	)
+}
+
 func TestACPMCPServerMatchesCoderSDKJSONShape(t *testing.T) {
 	assertSameJSONShape(t,
 		runtimeacp.MCPServer{

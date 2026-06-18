@@ -488,6 +488,32 @@ func TestMCPMessageProxiesRuntimeResult(t *testing.T) {
 	}
 }
 
+func TestMCPMessageNotificationProxiesToRuntime(t *testing.T) {
+	runtime := newFakeRuntimeClient()
+	client := newBridgeClient(t, runtime)
+
+	client.Notify("mcp/message", map[string]any{
+		"connectionId": "mcp-conn",
+		"method":       "notifications/initialized",
+		"params":       map[string]any{"ok": true},
+	})
+
+	if runtime.notified("mcp/message") != 1 {
+		t.Fatalf("mcp/message notifications = %d, want 1", runtime.notified("mcp/message"))
+	}
+	var params struct {
+		ConnectionID string `json:"connectionId"`
+		Method       string `json:"method"`
+		Params       struct {
+			OK bool `json:"ok"`
+		} `json:"params"`
+	}
+	runtime.lastNotificationParamsInto(t, "mcp/message", &params)
+	if params.ConnectionID != "mcp-conn" || params.Method != "notifications/initialized" || !params.Params.OK {
+		t.Fatalf("mcp/message notification params = %#v", params)
+	}
+}
+
 func TestCancelNotificationProxiesToRuntime(t *testing.T) {
 	runtime := newFakeRuntimeClient()
 	client := newBridgeClient(t, runtime)
@@ -695,6 +721,7 @@ type fakeRuntimeClient struct {
 	mu                          sync.Mutex
 	calls                       map[string]int
 	notifications               map[string]int
+	notificationParams          map[string]json.RawMessage
 	events                      chan runtimejsonrpc.Event
 	err                         error
 	childRequest                bool
@@ -712,11 +739,12 @@ type fakeRuntimeClient struct {
 
 func newFakeRuntimeClient() *fakeRuntimeClient {
 	return &fakeRuntimeClient{
-		calls:         map[string]int{},
-		notifications: map[string]int{},
-		events:        make(chan runtimejsonrpc.Event, 8),
-		cancelled:     make(chan struct{}),
-		responses:     make(chan runtimeChildResponse, 8),
+		calls:              map[string]int{},
+		notifications:      map[string]int{},
+		notificationParams: map[string]json.RawMessage{},
+		events:             make(chan runtimejsonrpc.Event, 8),
+		cancelled:          make(chan struct{}),
+		responses:          make(chan runtimeChildResponse, 8),
 	}
 }
 
@@ -824,13 +852,16 @@ func (f *fakeRuntimeClient) Request(_ctx context.Context, method string, params 
 	}
 }
 
-func (f *fakeRuntimeClient) Notify(_ctx context.Context, method string, _params any) error {
+func (f *fakeRuntimeClient) Notify(_ctx context.Context, method string, params any) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.err != nil {
 		return f.err
 	}
 	f.notifications[method]++
+	if raw, err := json.Marshal(params); err == nil {
+		f.notificationParams[method] = raw
+	}
 	if method == "session/cancel" {
 		select {
 		case <-f.cancelled:
@@ -872,6 +903,19 @@ func (f *fakeRuntimeClient) notified(method string) int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.notifications[method]
+}
+
+func (f *fakeRuntimeClient) lastNotificationParamsInto(t testing.TB, method string, target any) {
+	t.Helper()
+	f.mu.Lock()
+	raw := append(json.RawMessage(nil), f.notificationParams[method]...)
+	f.mu.Unlock()
+	if len(raw) == 0 {
+		t.Fatalf("notification params for %s were not recorded", method)
+	}
+	if err := json.Unmarshal(raw, target); err != nil {
+		t.Fatalf("decode %s notification params: %v\n%s", method, err, string(raw))
+	}
 }
 
 func (f *fakeRuntimeClient) nextResponse(t testing.TB) runtimeChildResponse {

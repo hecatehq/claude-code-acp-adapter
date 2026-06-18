@@ -65,6 +65,8 @@ runtime bridge.
   `_meta` data when forwarded to subprocess runtimes
 - unstable MCP-over-ACP `mcp/message` pass-through, including raw inner MCP
   response preservation
+- unstable MCP-over-ACP `mcp/message` notification forwarding from ACP clients
+  to subprocess runtimes
 - ACP server-to-runtime bridge behavior: handler param validation, session
   method proxying, prompt update forwarding, cancel notifications, close
   requests, and runtime RPC error mapping
