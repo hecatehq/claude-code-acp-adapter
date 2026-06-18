@@ -73,6 +73,8 @@ runtime bridge.
   before setter responses
 - runtime ACP raw lifecycle/config helpers preserve validated-but-unknown
   extension fields when the bridge forwards params to subprocess runtimes
+- runtime ACP prompt and session-list result wrappers preserve runtime-provided
+  extension fields when the bridge returns responses to ACP clients
 - ACP session load/resume/fork/list/delete protocol calls, including replay
   updates, raw resume/fork result preservation, listed session metadata, cursor
   parsing, and delete request forwarding

@@ -62,6 +62,8 @@ type ListSessionsParams struct {
 type ListSessionsResult struct {
 	Sessions   []SessionInfo `json:"sessions"`
 	NextCursor string        `json:"nextCursor,omitempty"`
+
+	raw json.RawMessage
 }
 
 type SessionInfo struct {
@@ -119,6 +121,8 @@ type EmbeddedResource struct {
 
 type PromptResult struct {
 	StopReason StopReason `json:"stopReason"`
+
+	raw json.RawMessage
 }
 
 type StopReason string
@@ -216,14 +220,27 @@ func PromptRaw(ctx context.Context, client JSONRPCClient, params json.RawMessage
 }
 
 func prompt(ctx context.Context, client JSONRPCClient, params any) (PromptResult, error) {
-	var result PromptResult
-	if err := requestInto(ctx, client, "session/prompt", params, &result); err != nil {
+	resultData, err := requestRaw(ctx, client, "session/prompt", params)
+	if err != nil {
 		return PromptResult{}, err
+	}
+	var result PromptResult
+	if err := json.Unmarshal(resultData, &result); err != nil {
+		return PromptResult{}, fmt.Errorf("decode session/prompt result: %w", err)
 	}
 	if result.StopReason == "" {
 		return PromptResult{}, errors.New("session/prompt result missing stopReason")
 	}
+	result.raw = append(json.RawMessage(nil), resultData...)
 	return result, nil
+}
+
+func (r PromptResult) MarshalJSON() ([]byte, error) {
+	if len(r.raw) != 0 {
+		return append([]byte(nil), r.raw...), nil
+	}
+	type alias PromptResult
+	return json.Marshal(alias(r))
 }
 
 func LoadSession(ctx context.Context, client JSONRPCClient, params LoadSessionParams) (json.RawMessage, error) {
@@ -243,14 +260,27 @@ func ResumeSessionRaw(ctx context.Context, client JSONRPCClient, params json.Raw
 }
 
 func ListSessions(ctx context.Context, client JSONRPCClient, params ListSessionsParams) (ListSessionsResult, error) {
-	var result ListSessionsResult
-	if err := requestInto(ctx, client, "session/list", params, &result); err != nil {
+	resultData, err := requestRaw(ctx, client, "session/list", params)
+	if err != nil {
 		return ListSessionsResult{}, err
+	}
+	var result ListSessionsResult
+	if err := json.Unmarshal(resultData, &result); err != nil {
+		return ListSessionsResult{}, fmt.Errorf("decode session/list result: %w", err)
 	}
 	if result.Sessions == nil {
 		result.Sessions = []SessionInfo{}
 	}
+	result.raw = append(json.RawMessage(nil), resultData...)
 	return result, nil
+}
+
+func (r ListSessionsResult) MarshalJSON() ([]byte, error) {
+	if len(r.raw) != 0 {
+		return append([]byte(nil), r.raw...), nil
+	}
+	type alias ListSessionsResult
+	return json.Marshal(alias(r))
 }
 
 func Cancel(ctx context.Context, client Notifier, params CancelParams) error {

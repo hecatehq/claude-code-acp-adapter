@@ -119,6 +119,25 @@ func TestPromptRawPreservesUnknownParams(t *testing.T) {
 	}
 }
 
+func TestPromptPreservesRawRuntimeResult(t *testing.T) {
+	client := &recordingACPClient{result: json.RawMessage(`{"stopReason":"end_turn","x-result":{"kept":true}}`)}
+
+	result, err := runtimeacp.Prompt(context.Background(), client, runtimeacp.PromptParams{
+		SessionID: "sess-test",
+		Prompt:    []runtimeacp.ContentBlock{{Type: "text", Text: "hello"}},
+	})
+	if err != nil {
+		t.Fatalf("Prompt returned error: %v", err)
+	}
+	raw, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("marshal result: %v", err)
+	}
+	if !strings.Contains(string(raw), `"x-result":{"kept":true}`) {
+		t.Fatalf("marshaled result = %s, want x-result preserved", raw)
+	}
+}
+
 func TestForkSessionSendsWorkspaceAndPreservesRuntimeResult(t *testing.T) {
 	client := newSessionClient(t)
 
@@ -222,6 +241,22 @@ func TestListSessionsParsesSessionsAndCursor(t *testing.T) {
 	}
 	if result.NextCursor != "page-2" {
 		t.Fatalf("NextCursor = %q, want page-2", result.NextCursor)
+	}
+}
+
+func TestListSessionsPreservesRawRuntimeResult(t *testing.T) {
+	client := &recordingACPClient{result: json.RawMessage(`{"sessions":[],"nextCursor":"page-2","x-result":true}`)}
+
+	result, err := runtimeacp.ListSessions(context.Background(), client, runtimeacp.ListSessionsParams{CWD: "/tmp/project"})
+	if err != nil {
+		t.Fatalf("ListSessions returned error: %v", err)
+	}
+	raw, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("marshal result: %v", err)
+	}
+	if !strings.Contains(string(raw), `"x-result":true`) {
+		t.Fatalf("marshaled result = %s, want x-result preserved", raw)
 	}
 }
 
