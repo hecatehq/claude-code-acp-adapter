@@ -27,6 +27,8 @@
 - use `internal/runtimeproc` as the only process-backed runtime launcher
 - use `internal/runtimejsonrpc` for newline-delimited JSON-RPC over runtime
   stdio
+- use `runtimejsonrpc.Client.Respond` for child runtime requests that need a
+  JSON-RPC response instead of treating every child request as terminal
 - use `internal/runtimeacp` for subprocess ACP lifecycle negotiation
 - build real session bridges on the typed `runtimeacp` initialize/session
   calls before adding vendor-specific tool mappings

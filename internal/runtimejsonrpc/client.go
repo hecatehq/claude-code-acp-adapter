@@ -134,6 +134,33 @@ func (c *Client) Notify(ctx context.Context, method string, params any) error {
 	}
 }
 
+func (c *Client) Respond(ctx context.Context, id json.RawMessage, result any, rpcErr *RPCError) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if len(id) == 0 {
+		return errors.New("runtime response id is required")
+	}
+	msg := envelope{JSONRPC: "2.0", ID: append(json.RawMessage(nil), id...)}
+	if rpcErr != nil {
+		msg.Error = rpcErr
+	} else {
+		msg.Result = mustRawJSON(result)
+	}
+	writeErr := make(chan error, 1)
+	go func() {
+		writeErr <- c.write(msg)
+	}()
+	select {
+	case err := <-writeErr:
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-c.done:
+		return c.errOrClosed()
+	}
+}
+
 func (c *Client) Events() <-chan Event {
 	return c.events
 }

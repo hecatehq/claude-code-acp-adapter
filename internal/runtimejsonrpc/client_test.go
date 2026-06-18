@@ -110,6 +110,69 @@ func TestChildRequestIsDeliveredAsEvent(t *testing.T) {
 	}
 }
 
+func TestChildRequestCanBeAnswered(t *testing.T) {
+	client := newHelperClient(t)
+
+	resultCh := make(chan childRequestResult, 1)
+	go func() {
+		result, err := client.Request(context.Background(), "runtime/child_request_wait", nil)
+		resultCh <- childRequestResult{result: result, err: err}
+	}()
+
+	event := nextEvent(t, client)
+	if event.Method != "session/request_permission" {
+		t.Fatalf("event method = %q, want session/request_permission", event.Method)
+	}
+	if string(event.ID) != `"child-1"` {
+		t.Fatalf("event ID = %s, want child-1", event.ID)
+	}
+	if err := client.Respond(context.Background(), event.ID, map[string]any{"outcome": "approved"}, nil); err != nil {
+		t.Fatalf("Respond returned error: %v", err)
+	}
+
+	select {
+	case result := <-resultCh:
+		if result.err != nil {
+			t.Fatalf("Request returned error: %v", result.err)
+		}
+		if !strings.Contains(string(result.result), "approved") {
+			t.Fatalf("result = %s, want approved", result.result)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for response")
+	}
+}
+
+func TestChildRequestCanBeAnsweredWithError(t *testing.T) {
+	client := newHelperClient(t)
+
+	resultCh := make(chan childRequestResult, 1)
+	go func() {
+		result, err := client.Request(context.Background(), "runtime/child_request_wait", nil)
+		resultCh <- childRequestResult{result: result, err: err}
+	}()
+
+	event := nextEvent(t, client)
+	if err := client.Respond(context.Background(), event.ID, nil, &runtimejsonrpc.RPCError{
+		Code:    -32060,
+		Message: "denied",
+	}); err != nil {
+		t.Fatalf("Respond returned error: %v", err)
+	}
+
+	select {
+	case result := <-resultCh:
+		if result.err != nil {
+			t.Fatalf("Request returned error: %v", result.err)
+		}
+		if !strings.Contains(string(result.result), "denied") {
+			t.Fatalf("result = %s, want denied", result.result)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for response")
+	}
+}
+
 func TestErrorResponseReturnsRPCError(t *testing.T) {
 	client := newHelperClient(t)
 
@@ -208,6 +271,11 @@ func nextEvent(t testing.TB, client *runtimejsonrpc.Client) runtimejsonrpc.Event
 	return runtimejsonrpc.Event{}
 }
 
+type childRequestResult struct {
+	result json.RawMessage
+	err    error
+}
+
 func TestRuntimeJSONRPCHelper(t *testing.T) {
 	if os.Getenv("GO_WANT_RUNTIMEJSONRPC_HELPER") != "1" {
 		return
@@ -295,6 +363,40 @@ func TestRuntimeJSONRPCHelper(t *testing.T) {
 				"jsonrpc": "2.0",
 				"id":      json.RawMessage(msg.ID),
 				"result":  map[string]any{"ok": true},
+			})
+		case "runtime/child_request_wait":
+			nextID++
+			childID := fmt.Sprintf("child-%d", nextID)
+			_ = encoder.Encode(map[string]any{
+				"jsonrpc": "2.0",
+				"id":      childID,
+				"method":  "session/request_permission",
+				"params":  map[string]any{"toolCallId": "tool-1"},
+			})
+			var response struct {
+				ID     json.RawMessage          `json:"id"`
+				Result map[string]any           `json:"result,omitempty"`
+				Error  *runtimejsonrpc.RPCError `json:"error,omitempty"`
+			}
+			if err := decoder.Decode(&response); err != nil {
+				return
+			}
+			if string(response.ID) != `"`+childID+`"` {
+				_ = encoder.Encode(map[string]any{
+					"jsonrpc": "2.0",
+					"id":      json.RawMessage(msg.ID),
+					"error":   map[string]any{"code": -32001, "message": "wrong child response id"},
+				})
+				continue
+			}
+			result := map[string]any{"childResult": response.Result}
+			if response.Error != nil {
+				result = map[string]any{"childError": response.Error.Message}
+			}
+			_ = encoder.Encode(map[string]any{
+				"jsonrpc": "2.0",
+				"id":      json.RawMessage(msg.ID),
+				"result":  result,
 			})
 		default:
 			_ = encoder.Encode(map[string]any{
