@@ -45,6 +45,23 @@ func TestNewSessionSendsWorkspaceAndMCPServers(t *testing.T) {
 	}
 }
 
+func TestNewSessionRawPreservesUnknownParams(t *testing.T) {
+	client := &recordingACPClient{result: json.RawMessage(`{"sessionId":"sess-test"}`)}
+
+	_, err := runtimeacp.NewSessionRaw(context.Background(), client, json.RawMessage(`{"cwd":"/tmp/project","x-extra":{"enabled":true}}`))
+	if err != nil {
+		t.Fatalf("NewSessionRaw returned error: %v", err)
+	}
+	if client.method != "session/new" {
+		t.Fatalf("method = %q, want session/new", client.method)
+	}
+	var params map[string]json.RawMessage
+	mustJSONRoundTrip(t, client.params, &params)
+	if string(params["x-extra"]) != `{"enabled":true}` {
+		t.Fatalf("x-extra = %s, want preserved object", params["x-extra"])
+	}
+}
+
 func TestPromptSendsTextContentAndParsesStopReason(t *testing.T) {
 	client := newSessionClient(t)
 
@@ -79,6 +96,26 @@ func TestPromptSendsTextContentAndParsesStopReason(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for prompt result")
+	}
+}
+
+func TestPromptRawPreservesUnknownParams(t *testing.T) {
+	client := &recordingACPClient{result: json.RawMessage(`{"stopReason":"end_turn"}`)}
+
+	_, err := runtimeacp.PromptRaw(context.Background(), client, json.RawMessage(`{"sessionId":"sess-test","prompt":[{"type":"text","text":"hello","x-block":1}],"x-prompt":true}`))
+	if err != nil {
+		t.Fatalf("PromptRaw returned error: %v", err)
+	}
+	if client.method != "session/prompt" {
+		t.Fatalf("method = %q, want session/prompt", client.method)
+	}
+	var params map[string]json.RawMessage
+	mustJSONRoundTrip(t, client.params, &params)
+	if string(params["x-prompt"]) != `true` {
+		t.Fatalf("x-prompt = %s, want true", params["x-prompt"])
+	}
+	if !strings.Contains(string(params["prompt"]), `"x-block":1`) {
+		t.Fatalf("prompt = %s, want x-block preserved", params["prompt"])
 	}
 }
 

@@ -52,7 +52,7 @@ func (b *Bridge) authenticate(ctx *acp.MethodContext, params json.RawMessage) (a
 	if rpcErr := decodeParams(params, &req); rpcErr != nil {
 		return nil, rpcErr
 	}
-	if err := runtimeacp.Authenticate(methodContext(ctx), b.runtime, req); err != nil {
+	if err := runtimeacp.AuthenticateRaw(methodContext(ctx), b.runtime, params); err != nil {
 		return nil, mapRuntimeError(err)
 	}
 	return map[string]any{}, nil
@@ -63,7 +63,7 @@ func (b *Bridge) logout(ctx *acp.MethodContext, params json.RawMessage) (any, *a
 	if rpcErr := decodeParams(params, &req); rpcErr != nil {
 		return nil, rpcErr
 	}
-	if err := runtimeacp.Logout(methodContext(ctx), b.runtime); err != nil {
+	if err := runtimeacp.LogoutRaw(methodContext(ctx), b.runtime, params); err != nil {
 		return nil, mapRuntimeError(err)
 	}
 	return map[string]any{}, nil
@@ -75,7 +75,7 @@ func (b *Bridge) newSession(ctx *acp.MethodContext, params json.RawMessage) (any
 		return nil, rpcErr
 	}
 	return b.callWithEvents(ctx, func(callCtx context.Context) (any, error) {
-		return runtimeacp.NewSession(callCtx, b.runtime, req)
+		return runtimeacp.NewSessionRaw(callCtx, b.runtime, params)
 	})
 }
 
@@ -85,7 +85,7 @@ func (b *Bridge) forkSession(ctx *acp.MethodContext, params json.RawMessage) (an
 		return nil, rpcErr
 	}
 	return b.callWithEvents(ctx, func(callCtx context.Context) (any, error) {
-		return runtimeacp.ForkSession(callCtx, b.runtime, req)
+		return runtimeacp.ForkSessionRaw(callCtx, b.runtime, params)
 	})
 }
 
@@ -95,7 +95,7 @@ func (b *Bridge) loadSession(ctx *acp.MethodContext, params json.RawMessage) (an
 		return nil, rpcErr
 	}
 	return b.callWithEvents(ctx, func(callCtx context.Context) (any, error) {
-		return runtimeacp.LoadSession(callCtx, b.runtime, req)
+		return runtimeacp.LoadSessionRaw(callCtx, b.runtime, params)
 	})
 }
 
@@ -105,7 +105,7 @@ func (b *Bridge) resumeSession(ctx *acp.MethodContext, params json.RawMessage) (
 		return nil, rpcErr
 	}
 	return b.callWithEvents(ctx, func(callCtx context.Context) (any, error) {
-		return runtimeacp.ResumeSession(callCtx, b.runtime, req)
+		return runtimeacp.ResumeSessionRaw(callCtx, b.runtime, params)
 	})
 }
 
@@ -127,7 +127,7 @@ func (b *Bridge) setConfigOption(ctx *acp.MethodContext, params json.RawMessage)
 		return nil, rpcErr
 	}
 	return b.callWithEvents(ctx, func(callCtx context.Context) (any, error) {
-		return runtimeacp.SetConfigOption(callCtx, b.runtime, req)
+		return runtimeacp.SetConfigOptionRaw(callCtx, b.runtime, params)
 	})
 }
 
@@ -137,7 +137,7 @@ func (b *Bridge) setMode(ctx *acp.MethodContext, params json.RawMessage) (any, *
 		return nil, rpcErr
 	}
 	return b.callWithEvents(ctx, func(callCtx context.Context) (any, error) {
-		return runtimeacp.SetMode(callCtx, b.runtime, req)
+		return runtimeacp.SetModeRaw(callCtx, b.runtime, params)
 	})
 }
 
@@ -147,7 +147,7 @@ func (b *Bridge) prompt(ctx *acp.MethodContext, params json.RawMessage) (any, *a
 		return nil, rpcErr
 	}
 	return b.callWithEvents(ctx, func(callCtx context.Context) (any, error) {
-		return runtimeacp.Prompt(callCtx, b.runtime, req)
+		return runtimeacp.PromptRaw(callCtx, b.runtime, params)
 	})
 }
 
@@ -196,7 +196,7 @@ func (b *Bridge) closeSession(ctx *acp.MethodContext, params json.RawMessage) (a
 		return nil, rpcErr
 	}
 	return b.callWithEvents(ctx, func(callCtx context.Context) (any, error) {
-		if err := runtimeacp.CloseSession(callCtx, b.runtime, req); err != nil {
+		if err := runtimeacp.CloseSessionRaw(callCtx, b.runtime, params); err != nil {
 			return nil, err
 		}
 		return map[string]any{}, nil
@@ -208,7 +208,7 @@ func (b *Bridge) deleteSession(ctx *acp.MethodContext, params json.RawMessage) (
 	if rpcErr := decodeParams(params, &req); rpcErr != nil {
 		return nil, rpcErr
 	}
-	if err := runtimeacp.DeleteSession(methodContext(ctx), b.runtime, req); err != nil {
+	if err := runtimeacp.DeleteSessionRaw(methodContext(ctx), b.runtime, params); err != nil {
 		return nil, mapRuntimeError(err)
 	}
 	return map[string]any{}, nil

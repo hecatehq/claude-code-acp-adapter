@@ -33,6 +33,23 @@ func TestSetConfigOptionReturnsRawConfigState(t *testing.T) {
 	}
 }
 
+func TestSetConfigOptionRawPreservesUnknownParams(t *testing.T) {
+	client := &recordingACPClient{result: json.RawMessage(`{"configOptions":[]}`)}
+
+	_, err := runtimeacp.SetConfigOptionRaw(context.Background(), client, json.RawMessage(`{"sessionId":"sess-test","configId":"model","value":"smart","x-extra":1}`))
+	if err != nil {
+		t.Fatalf("SetConfigOptionRaw returned error: %v", err)
+	}
+	if client.method != "session/set_config_option" {
+		t.Fatalf("method = %q, want session/set_config_option", client.method)
+	}
+	var params map[string]json.RawMessage
+	mustJSONRoundTrip(t, client.params, &params)
+	if string(params["x-extra"]) != `1` {
+		t.Fatalf("x-extra = %s, want 1", params["x-extra"])
+	}
+}
+
 func TestSetModeReturnsRawModeState(t *testing.T) {
 	client := &recordingACPClient{result: json.RawMessage(`{"modes":{"currentModeId":"code"}}`)}
 

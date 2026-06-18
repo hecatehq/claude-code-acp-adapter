@@ -43,6 +43,28 @@ func TestNewSessionProxiesToRuntime(t *testing.T) {
 	}
 }
 
+func TestNewSessionForwardsRawParamsToRuntime(t *testing.T) {
+	runtime := newFakeRuntimeClient()
+	client := newBridgeClient(t, runtime)
+
+	response := client.Request("session/new", map[string]any{
+		"cwd":     "/tmp/project",
+		"x-extra": map[string]any{"enabled": true},
+	})
+	var result struct {
+		SessionID string `json:"sessionId"`
+	}
+	response.ResultInto(t, &result)
+	if result.SessionID != "sess-bridge" {
+		t.Fatalf("sessionId = %q, want sess-bridge", result.SessionID)
+	}
+	var params map[string]json.RawMessage
+	runtime.lastRequestParamsInto(t, "session/new", &params)
+	if string(params["x-extra"]) != `{"enabled":true}` {
+		t.Fatalf("x-extra = %s, want preserved object", params["x-extra"])
+	}
+}
+
 func TestNewSessionForwardsRuntimeUpdatesBeforeResponse(t *testing.T) {
 	runtime := newFakeRuntimeClient()
 	runtime.events = make(chan runtimejsonrpc.Event)
@@ -120,6 +142,37 @@ func TestPromptForwardsRuntimeUpdatesBeforeResponse(t *testing.T) {
 	envelopes[1].ResultInto(t, &result)
 	if result.StopReason != "end_turn" {
 		t.Fatalf("stopReason = %q, want end_turn", result.StopReason)
+	}
+}
+
+func TestPromptForwardsRawParamsToRuntime(t *testing.T) {
+	runtime := newFakeRuntimeClient()
+	client := newBridgeClient(t, runtime)
+
+	envelopes := client.Send(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "prompt-1",
+		"method":  "session/prompt",
+		"params": map[string]any{
+			"sessionId": "sess-bridge",
+			"prompt": []map[string]any{{
+				"type":    "text",
+				"text":    "hello",
+				"x-block": float64(1),
+			}},
+			"x-prompt": true,
+		},
+	})
+	if len(envelopes) != 2 {
+		t.Fatalf("got %d envelopes, want notification + response", len(envelopes))
+	}
+	var params map[string]json.RawMessage
+	runtime.lastRequestParamsInto(t, "session/prompt", &params)
+	if string(params["x-prompt"]) != `true` {
+		t.Fatalf("x-prompt = %s, want true", params["x-prompt"])
+	}
+	if !strings.Contains(string(params["prompt"]), `"x-block":1`) {
+		t.Fatalf("prompt = %s, want x-block preserved", params["prompt"])
 	}
 }
 
@@ -899,6 +952,7 @@ func readBridgeResponseLine(t testing.TB, reader *bufio.Reader) acptest.Response
 type fakeRuntimeClient struct {
 	mu                            sync.Mutex
 	calls                         map[string]int
+	requestParams                 map[string]json.RawMessage
 	notifications                 map[string]int
 	notificationParams            map[string]json.RawMessage
 	events                        chan runtimejsonrpc.Event
@@ -923,6 +977,7 @@ type fakeRuntimeClient struct {
 func newFakeRuntimeClient() *fakeRuntimeClient {
 	return &fakeRuntimeClient{
 		calls:              map[string]int{},
+		requestParams:      map[string]json.RawMessage{},
 		notifications:      map[string]int{},
 		notificationParams: map[string]json.RawMessage{},
 		events:             make(chan runtimejsonrpc.Event, 8),
@@ -932,8 +987,10 @@ func newFakeRuntimeClient() *fakeRuntimeClient {
 }
 
 func (f *fakeRuntimeClient) Request(ctx context.Context, method string, params any) (json.RawMessage, error) {
+	raw, _ := json.Marshal(params)
 	f.mu.Lock()
 	f.calls[method]++
+	f.requestParams[method] = append(json.RawMessage(nil), raw...)
 	err := f.err
 	f.mu.Unlock()
 	if err != nil {
@@ -1124,6 +1181,19 @@ func (f *fakeRuntimeClient) lastNotificationParamsInto(t testing.TB, method stri
 	}
 	if err := json.Unmarshal(raw, target); err != nil {
 		t.Fatalf("decode %s notification params: %v\n%s", method, err, string(raw))
+	}
+}
+
+func (f *fakeRuntimeClient) lastRequestParamsInto(t testing.TB, method string, target any) {
+	t.Helper()
+	f.mu.Lock()
+	raw := append(json.RawMessage(nil), f.requestParams[method]...)
+	f.mu.Unlock()
+	if len(raw) == 0 {
+		t.Fatalf("request params for %s were not recorded", method)
+	}
+	if err := json.Unmarshal(raw, target); err != nil {
+		t.Fatalf("decode %s request params: %v\n%s", method, err, string(raw))
 	}
 }
 

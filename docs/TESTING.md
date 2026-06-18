@@ -71,6 +71,8 @@ runtime bridge.
 - runtime ACP config/mode setters: `session/set_config_option` and
   `session/set_mode` raw result forwarding, including session updates emitted
   before setter responses
+- runtime ACP raw lifecycle/config helpers preserve validated-but-unknown
+  extension fields when the bridge forwards params to subprocess runtimes
 - ACP session load/resume/fork/list/delete protocol calls, including replay
   updates, raw resume/fork result preservation, listed session metadata, cursor
   parsing, and delete request forwarding
