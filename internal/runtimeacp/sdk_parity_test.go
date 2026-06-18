@@ -74,6 +74,27 @@ func TestInitializeParamsKeepAdapterJSONShape(t *testing.T) {
 	}
 }
 
+func TestClientCapabilitiesWithAuthMatchCoderSDKJSONShape(t *testing.T) {
+	assertSameJSONShape(t,
+		runtimeacp.ClientCapabilities{
+			Auth:     &runtimeacp.AuthCapabilities{Terminal: true},
+			Terminal: true,
+			FS: runtimeacp.FileSystemCapabilities{
+				ReadTextFile:  true,
+				WriteTextFile: true,
+			},
+		},
+		sdk.ClientCapabilities{
+			Auth:     sdk.AuthCapabilities{Terminal: true},
+			Terminal: true,
+			Fs: sdk.FileSystemCapabilities{
+				ReadTextFile:  true,
+				WriteTextFile: true,
+			},
+		},
+	)
+}
+
 func TestCancelParamsMatchCoderSDKJSONShape(t *testing.T) {
 	assertSameJSONShape(t,
 		runtimeacp.CancelParams{SessionID: "sess-test"},

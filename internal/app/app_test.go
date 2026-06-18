@@ -130,7 +130,7 @@ func TestRuntimeFlagsForwardInitializeClientCapabilities(t *testing.T) {
 	var stderr bytes.Buffer
 	workdir := t.TempDir()
 	input := strings.NewReader(strings.Join([]string{
-		`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientCapabilities":{"terminal":true}}}`,
+		`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientCapabilities":{"auth":{"terminal":true},"terminal":true}}}`,
 		`{"jsonrpc":"2.0","id":2,"method":"session/new","params":{"cwd":"` + workdir + `"}}`,
 	}, "\n") + "\n")
 
@@ -141,6 +141,7 @@ func TestRuntimeFlagsForwardInitializeClientCapabilities(t *testing.T) {
 		"--runtime-arg=--",
 		"--runtime-arg=app-runtime-helper",
 		"--runtime-arg=require-terminal-capability",
+		"--runtime-arg=require-auth-terminal-capability",
 	}, input, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("Run returned %d, want 0; stderr=%q stdout=%q", code, stderr.String(), stdout.String())
@@ -211,6 +212,7 @@ func TestAppRuntimeHelper(t *testing.T) {
 		return
 	}
 	requireTerminalCapability := hasArg(os.Args, "require-terminal-capability")
+	requireAuthTerminalCapability := hasArg(os.Args, "require-auth-terminal-capability")
 	decoder := json.NewDecoder(os.Stdin)
 	encoder := json.NewEncoder(os.Stdout)
 	for {
@@ -232,6 +234,9 @@ func TestAppRuntimeHelper(t *testing.T) {
 					Version string `json:"version"`
 				} `json:"clientInfo"`
 				ClientCapabilities struct {
+					Auth struct {
+						Terminal bool `json:"terminal"`
+					} `json:"auth"`
 					Terminal bool `json:"terminal"`
 				} `json:"clientCapabilities"`
 			}
@@ -241,6 +246,10 @@ func TestAppRuntimeHelper(t *testing.T) {
 			}
 			if requireTerminalCapability && !req.ClientCapabilities.Terminal {
 				_ = encoder.Encode(appRuntimeError(msg.ID, -32050, "missing terminal capability", string(msg.Params)))
+				continue
+			}
+			if requireAuthTerminalCapability && !req.ClientCapabilities.Auth.Terminal {
+				_ = encoder.Encode(appRuntimeError(msg.ID, -32050, "missing auth terminal capability", string(msg.Params)))
 				continue
 			}
 			if req.ProtocolVersion != 1 || req.ClientInfo.Name != "claude-code-acp-adapter" {
