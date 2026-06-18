@@ -40,8 +40,10 @@
   calls before adding vendor-specific tool mappings
 - use `internal/runtimebridge` as the ACP server handler seam for
   subprocess-backed sessions
-- keep session load/resume/list/delete protocol forwarding in
+- keep session load/resume/fork/list/delete protocol forwarding in
   `runtimeacp`/`runtimebridge`; vendor-specific persistence belongs above it
+- forward unstable MCP-over-ACP `mcp/message` payloads as raw protocol data
+  until the adapter owns real vendor MCP connection lifecycle semantics
 - preserve extra `session/new` result fields such as `configOptions` and
   `modes`; never narrow runtime session setup responses down to `sessionId`
 - forward session configuration changes (`session/set_config_option`) and the
