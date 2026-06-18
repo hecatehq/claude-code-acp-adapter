@@ -10,6 +10,7 @@ import (
 	"github.com/hecatehq/claude-code-acp-adapter/internal/acp"
 	"github.com/hecatehq/claude-code-acp-adapter/internal/doctor"
 	"github.com/hecatehq/claude-code-acp-adapter/internal/runtimeacp"
+	"github.com/hecatehq/claude-code-acp-adapter/internal/runtimebridge"
 	"github.com/hecatehq/claude-code-acp-adapter/internal/runtimehost"
 	"github.com/hecatehq/claude-code-acp-adapter/internal/runtimeproc"
 	"github.com/spf13/cobra"
@@ -52,7 +53,7 @@ func newRootCommand(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.
 				if runtimeWorkDir == "" {
 					return fmt.Errorf("--runtime-workdir is required when --runtime-binary is set")
 				}
-				host, err := runtimehost.Start(cmd.Context(), runtimehost.Spec{
+				host := newDeferredRuntimeHost(cmd.Context(), runtimehost.Spec{
 					Launch: runtimeproc.LaunchSpec{
 						Binary:  runtimeBinary,
 						Args:    runtimeArgs,
@@ -64,13 +65,13 @@ func newRootCommand(stdin io.Reader, stdout io.Writer, stderr io.Writer) *cobra.
 						Version: info.Version,
 					},
 				})
-				if err != nil {
-					return fmt.Errorf("start runtime host: %w", err)
-				}
 				defer func() {
 					_ = host.Close()
 				}()
-				opts = append([]acp.Option{acp.WithInitializeResult(host.InitializeResult())}, host.Options()...)
+				opts = append(
+					[]acp.Option{acp.WithInitializeHandler(host.Initialize)},
+					runtimebridge.New(host).Options()...,
+				)
 			}
 			server := acp.NewServer(info, opts...)
 			if err := server.Serve(stdin, stdout); err != nil {

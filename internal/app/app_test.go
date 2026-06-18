@@ -125,6 +125,52 @@ func TestRuntimeFlagsStartProcessBackedACPBridge(t *testing.T) {
 	decodeAppResult(t, responses[5], &deleteResult)
 }
 
+func TestRuntimeFlagsForwardInitializeClientCapabilities(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	workdir := t.TempDir()
+	input := strings.NewReader(strings.Join([]string{
+		`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientCapabilities":{"terminal":true}}}`,
+		`{"jsonrpc":"2.0","id":2,"method":"session/new","params":{"cwd":"` + workdir + `"}}`,
+	}, "\n") + "\n")
+
+	code := Run([]string{
+		"--runtime-binary", os.Args[0],
+		"--runtime-workdir", workdir,
+		"--runtime-arg=-test.run=TestAppRuntimeHelper",
+		"--runtime-arg=--",
+		"--runtime-arg=app-runtime-helper",
+		"--runtime-arg=require-terminal-capability",
+	}, input, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run returned %d, want 0; stderr=%q stdout=%q", code, stderr.String(), stdout.String())
+	}
+
+	responses := decodeAppResponses(t, stdout.Bytes())
+	if len(responses) != 2 {
+		t.Fatalf("got %d envelopes, want initialize + session/new\n%s", len(responses), stdout.String())
+	}
+	if responses[0].Error != nil {
+		t.Fatalf("initialize error = %+v", responses[0].Error)
+	}
+	var initialize struct {
+		AgentInfo struct {
+			Name string `json:"name"`
+		} `json:"agentInfo"`
+	}
+	decodeAppResult(t, responses[0], &initialize)
+	if initialize.AgentInfo.Name != "app-helper-runtime" {
+		t.Fatalf("initialize agent name = %q, want app-helper-runtime", initialize.AgentInfo.Name)
+	}
+	var session struct {
+		SessionID string `json:"sessionId"`
+	}
+	decodeAppResult(t, responses[1], &session)
+	if session.SessionID != "app-session" {
+		t.Fatalf("sessionId = %q, want app-session", session.SessionID)
+	}
+}
+
 func TestRuntimeBinaryRequiresRuntimeWorkdir(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -164,6 +210,7 @@ func TestAppRuntimeHelper(t *testing.T) {
 	if !hasArg(os.Args, "app-runtime-helper") {
 		return
 	}
+	requireTerminalCapability := hasArg(os.Args, "require-terminal-capability")
 	decoder := json.NewDecoder(os.Stdin)
 	encoder := json.NewEncoder(os.Stdout)
 	for {
@@ -184,9 +231,16 @@ func TestAppRuntimeHelper(t *testing.T) {
 					Title   string `json:"title"`
 					Version string `json:"version"`
 				} `json:"clientInfo"`
+				ClientCapabilities struct {
+					Terminal bool `json:"terminal"`
+				} `json:"clientCapabilities"`
 			}
 			if err := json.Unmarshal(msg.Params, &req); err != nil {
 				_ = encoder.Encode(appRuntimeError(msg.ID, -32602, "invalid initialize params", err.Error()))
+				continue
+			}
+			if requireTerminalCapability && !req.ClientCapabilities.Terminal {
+				_ = encoder.Encode(appRuntimeError(msg.ID, -32050, "missing terminal capability", string(msg.Params)))
 				continue
 			}
 			if req.ProtocolVersion != 1 || req.ClientInfo.Name != "claude-code-acp-adapter" {

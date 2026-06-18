@@ -69,7 +69,8 @@ runtime bridge.
 - runtime host composition: subprocess launch, ACP initialize handshake,
   initialize result retention, bridge option exposure, prompt update forwarding,
   and protocol-version mismatch cleanup
-- root ACP runtime flags: opt-in subprocess-backed serving, required absolute
+- root ACP runtime flags: opt-in subprocess-backed serving, deferred runtime
+  startup with forwarded client initialize capabilities, required absolute
   runtime workdir, runtime argv passthrough, and default scaffold behavior when
   no runtime binary is configured
 

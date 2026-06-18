@@ -68,6 +68,13 @@ func (h *Host) Options() []acp.Option {
 	return h.bridge.Options()
 }
 
+func (h *Host) RuntimeClient() runtimebridge.RuntimeClient {
+	if h == nil {
+		return nil
+	}
+	return h.client
+}
+
 func (h *Host) Kill() error {
 	if h == nil || h.client == nil {
 		return nil
