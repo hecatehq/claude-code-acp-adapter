@@ -74,13 +74,15 @@ type SessionInfo struct {
 }
 
 type MCPServer struct {
-	Type    string        `json:"type,omitempty"`
-	Name    string        `json:"name"`
-	Command string        `json:"command,omitempty"`
-	Args    []string      `json:"args,omitempty"`
-	Env     []EnvVariable `json:"env,omitempty"`
-	URL     string        `json:"url,omitempty"`
-	Headers []HTTPHeader  `json:"headers,omitempty"`
+	Meta    map[string]any `json:"_meta,omitempty"`
+	Type    string         `json:"type,omitempty"`
+	ID      string         `json:"id,omitempty"`
+	Name    string         `json:"name"`
+	Command string         `json:"command,omitempty"`
+	Args    []string       `json:"args,omitempty"`
+	Env     []EnvVariable  `json:"env,omitempty"`
+	URL     string         `json:"url,omitempty"`
+	Headers []HTTPHeader   `json:"headers,omitempty"`
 }
 
 type EnvVariable struct {
