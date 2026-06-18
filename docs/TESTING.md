@@ -7,6 +7,8 @@ runtime bridge.
 
 - CLI version output
 - ACP `initialize` response shape
+- custom ACP `initialize` handlers receiving raw client params before returning
+  dynamic initialize results
 - runtime-backed initialize passthrough so child agent info, capabilities, and
   auth methods reach the ACP client
 - runtime ACP auth calls: `authenticate` method-id forwarding and `logout`

@@ -25,13 +25,16 @@ type Capabilities struct {
 }
 
 type Server struct {
-	info          AdapterInfo
-	initialize    any
-	methods       map[string]MethodHandler
-	notifications map[string]NotificationHandler
+	info              AdapterInfo
+	initialize        any
+	initializeHandler InitializeHandler
+	methods           map[string]MethodHandler
+	notifications     map[string]NotificationHandler
 }
 
 type Option func(*Server)
+
+type InitializeHandler func(params json.RawMessage) (any, *RPCError)
 
 type MethodHandler func(ctx *MethodContext, params json.RawMessage) (any, *RPCError)
 
@@ -96,6 +99,12 @@ func WithNotification(method string, handler NotificationHandler) Option {
 func WithInitializeResult(result any) Option {
 	return func(s *Server) {
 		s.initialize = result
+	}
+}
+
+func WithInitializeHandler(handler InitializeHandler) Option {
+	return func(s *Server) {
+		s.initializeHandler = handler
 	}
 }
 
@@ -172,6 +181,13 @@ func (s *Server) handle(ctx *MethodContext, req request) response {
 
 	switch req.Method {
 	case "initialize":
+		if s.initializeHandler != nil {
+			result, rpcErr := s.initializeHandler(req.Params)
+			if rpcErr != nil {
+				return response{JSONRPC: "2.0", ID: req.ID, Error: rpcErr}
+			}
+			return resultResponse(req.ID, result)
+		}
 		if s.initialize != nil {
 			return resultResponse(req.ID, s.initialize)
 		}

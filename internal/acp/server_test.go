@@ -84,6 +84,40 @@ func TestInitializeCanUseRuntimeResult(t *testing.T) {
 	}
 }
 
+func TestInitializeHandlerReceivesClientParams(t *testing.T) {
+	server := NewServer(AdapterInfo{Name: "claude-code-acp-adapter"}, WithInitializeHandler(func(params json.RawMessage) (any, *RPCError) {
+		var req struct {
+			ClientCapabilities struct {
+				Terminal bool `json:"terminal"`
+			} `json:"clientCapabilities"`
+		}
+		if err := json.Unmarshal(params, &req); err != nil {
+			return nil, &RPCError{Code: -32602, Message: "invalid params", Data: err.Error()}
+		}
+		return map[string]any{
+			"protocolVersion": 1,
+			"agentCapabilities": map[string]any{
+				"terminalEcho": req.ClientCapabilities.Terminal,
+			},
+		}, nil
+	}))
+
+	var out bytes.Buffer
+	err := server.Serve(strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientCapabilities":{"terminal":true}}}`+"\n"), &out)
+	if err != nil {
+		t.Fatalf("Serve returned error: %v", err)
+	}
+	envelopes := decodeServerEnvelopes(t, out.Bytes())
+	var result map[string]any
+	if err := json.Unmarshal(envelopes[0].Result, &result); err != nil {
+		t.Fatalf("decode result: %v", err)
+	}
+	caps := result["agentCapabilities"].(map[string]any)
+	if caps["terminalEcho"] != true {
+		t.Fatalf("terminalEcho = %v, want true", caps["terminalEcho"])
+	}
+}
+
 func TestPromptReturnsStructuredNotImplemented(t *testing.T) {
 	server := NewServer(AdapterInfo{Name: "claude-code-acp-adapter"})
 
