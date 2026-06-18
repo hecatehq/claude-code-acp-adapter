@@ -41,6 +41,9 @@ runtime bridge.
 - ACP server-to-runtime bridge behavior: handler param validation, session
   method proxying, prompt update forwarding, cancel notifications, close
   requests, and runtime RPC error mapping
+- runtime host composition: subprocess launch, ACP initialize handshake,
+  initialize result retention, bridge option exposure, prompt update forwarding,
+  and protocol-version mismatch cleanup
 
 ## Not Covered Yet
 
@@ -97,3 +100,9 @@ Use `internal/runtimebridge` to connect ACP server handlers to a
 subprocess-backed runtime client. It owns handler-level param decoding,
 runtime-error mapping, and forwarding runtime `session/update` notifications
 while a prompt request is active.
+
+Use `internal/runtimehost` as the composition boundary for real runtime
+sessions. It owns launching the subprocess-backed client, sending the ACP
+`initialize` handshake with adapter identity/capabilities, retaining the
+runtime's initialize result, exposing the bridge's ACP handler options, and
+force-closing the child during cleanup.

@@ -32,15 +32,14 @@ Implemented:
 - ACP initialize client for subprocess runtime negotiation
 - typed ACP session lifecycle calls for subprocess runtimes
 - ACP server-to-runtime bridge for session methods and streamed updates
+- runtime host seam that launches, initializes, and exposes the bridged child
 
 Not implemented yet:
 
 - Claude Code / Claude Agent SDK integration
-- session creation/load/resume/list
-- prompt streaming
-- tool/permission/elicitation mapping
-- cancellation and orphan-result handling
-- model discovery/config options
+- real runtime-backed session load/resume/list
+- vendor-specific prompt/tool/permission/elicitation mapping
+- runtime config/auth/model discovery and orphan-result handling
 - release packaging
 
 ## Development

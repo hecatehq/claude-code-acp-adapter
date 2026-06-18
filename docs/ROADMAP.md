@@ -32,6 +32,8 @@
   calls before adding vendor-specific tool mappings
 - use `internal/runtimebridge` as the ACP server handler seam for
   subprocess-backed sessions
+- use `internal/runtimehost` to compose process launch, runtime initialize, and
+  ACP server bridge options
 - keep `doctor` green against the target Claude Code binary before enabling
   real runtime sessions
 - choose a stable Claude Code / Claude Agent SDK integration boundary
