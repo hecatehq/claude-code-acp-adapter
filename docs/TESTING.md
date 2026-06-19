@@ -118,8 +118,9 @@ runtime bridge.
   environment status list
 - root ACP runtime flags: opt-in subprocess-backed serving, deferred runtime
   startup with forwarded client initialize capabilities, required absolute
-  runtime workdir, runtime argv passthrough, and default scaffold behavior when
-  no runtime binary is configured
+  runtime workdir, runtime argv passthrough, Claude-specific environment
+  allowlist inheritance, and default scaffold behavior when no runtime binary is
+  configured
 - Coder ACP SDK compatibility guardrails for the adopted protocol primitives:
   JSON-RPC error shape, default initialize protocol version, and selected
   runtime ACP request JSON shapes

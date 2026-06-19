@@ -81,6 +81,10 @@ secret values. Use `--binary` to point at a non-default Claude executable and
 
 The root ACP server can also launch an opt-in subprocess-backed runtime with
 `--runtime-binary`, `--runtime-workdir`, and repeated `--runtime-arg` flags.
+That runtime process receives only the Claude Code adapter's explicit
+environment allowlist (`PATH`, `HOME`, `XDG_CONFIG_HOME`, `TMPDIR`,
+`ANTHROPIC_API_KEY`, `ANTHROPIC_BASE_URL`, and `CLAUDE_CONFIG_DIR`); the parent
+environment is not inherited wholesale.
 Without `--runtime-binary`, the adapter keeps the scaffold handlers so the
 protocol shell remains safe to test before the real Claude Code boundary is
 enabled.

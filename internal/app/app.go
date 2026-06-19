@@ -26,6 +26,17 @@ func adapterSpec(stdin io.Reader, stdout io.Writer, stderr io.Writer) adaptercli
 		Stdin:  stdin,
 		Stdout: stdout,
 		Stderr: stderr,
+		Runtime: adaptercli.RuntimeSpec{
+			InheritEnv: []string{
+				"PATH",
+				"HOME",
+				"XDG_CONFIG_HOME",
+				"TMPDIR",
+				"ANTHROPIC_API_KEY",
+				"ANTHROPIC_BASE_URL",
+				"CLAUDE_CONFIG_DIR",
+			},
+		},
 		Doctor: &adaptercli.DoctorSpec{
 			Short:       "Check the local Claude Code runtime boundary",
 			Binary:      "claude",
