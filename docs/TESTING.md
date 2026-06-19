@@ -1,7 +1,9 @@
 # Testing
 
-This repository currently tests the adapter scaffold, not a complete Claude Code
-runtime bridge.
+This repository tests the adapter scaffold, the subprocess-backed ACP runtime
+bridge, and the first native Claude Code command bridge. It does not yet cover
+a complete Claude Agent replacement with persistent vendor sessions and
+tool/permission/elicitation parity.
 
 ## Covered Today
 
@@ -119,8 +121,12 @@ runtime bridge.
 - root ACP runtime flags: opt-in subprocess-backed serving, deferred runtime
   startup with forwarded client initialize capabilities, required absolute
   runtime workdir, runtime argv passthrough, Claude-specific environment
-  allowlist inheritance, and default scaffold behavior when no runtime binary is
-  configured
+  allowlist inheritance, and runtime-flag precedence over the native command
+  bridge
+- root ACP native command bridge: session creation with Claude model/effort
+  config options, config updates, `claude --print` argv construction,
+  additional workspace directories, assistant text updates from command stdout,
+  and prompt completion
 - Coder ACP SDK compatibility guardrails for the adopted protocol primitives:
   JSON-RPC error shape, default initialize protocol version, and selected
   runtime ACP request JSON shapes
@@ -141,8 +147,8 @@ adapter to this one:
 - auth methods and terminal auth behavior in local/remote environments
 - gateway auth metadata
 - settings resolution, settings trust filtering, and settings reloads
-- model allowlists, model aliases, effort options, and permission-mode
-  availability by model
+- model allowlists, model alias discovery, and permission-mode availability by
+  model beyond the initial static command-backed selectors
 - AskUserQuestion and MCP elicitation forms
 - shell, file, edit, grep, glob, web, MCP, TODO, task, plan, memory, and
   terminal-output tool mappings
@@ -167,6 +173,7 @@ Keep this repository's tests focused on Claude Code-specific adapter behavior:
 - scaffold `initialize` metadata and Claude capability flags;
 - `doctor` command defaults for the Claude binary and Claude environment list;
 - runtime flag wiring from Cobra into the shared runtime host;
+- command-backed `claude --print` argv construction and config-option mapping;
 - Claude-specific prompt, tool, permission, config, model, MCP, auth, and
   session mapping as those features land.
 

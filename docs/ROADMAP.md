@@ -23,6 +23,10 @@
 
 ## Phase 3: Claude Code Runtime Bridge
 
+- use `acp-adapter-kit/commandbridge` for the first no-npm native path: one
+  lightweight ACP session per workspace, one `claude --print` process per
+  prompt, stdout forwarded as assistant text, and ACP cancel mapped to process
+  cancellation
 - use `acp-adapter-kit/process` for every subprocess boundary
 - use `acp-adapter-kit/runtimeproc` as the only process-backed runtime launcher
 - use `acp-adapter-kit/runtimejsonrpc` for newline-delimited JSON-RPC over
@@ -71,8 +75,10 @@
 - keep `runtimeacp.InitializeParams` hand-written for now because the generated
   SDK request emits `clientCapabilities.auth` when client capabilities are set,
   which would change the adapter's current initialize wire shape
-- choose a stable Claude Code / Claude Agent SDK integration boundary
+- expand the native Claude Code / Claude Agent integration boundary beyond
+  `claude --print`
 - implement auth/session/prompt/cancel/config/mcp/tool/elicitation mappings
+  that are not covered by the first command-backed path
 - port the edge cases recorded in `SOURCE_REVIEW.md`
 
 ## Phase 4: Release and Hecate Integration
