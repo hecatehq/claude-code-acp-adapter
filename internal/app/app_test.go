@@ -281,8 +281,8 @@ func TestCommandBridgeRunsClaudePrintWithConfigOptions(t *testing.T) {
 		t.Fatalf("Run returned %d, want 0; stderr=%q stdout=%q", code, stderr.String(), stdout.String())
 	}
 	responses := decodeAppResponses(t, stdout.Bytes())
-	if len(responses) != 5 {
-		t.Fatalf("got %d envelopes, want session/new, two config updates, assistant update, prompt result\n%s", len(responses), stdout.String())
+	if len(responses) != 7 {
+		t.Fatalf("got %d envelopes, want session/new, two config updates, tool start, assistant update, tool finish, prompt result\n%s", len(responses), stdout.String())
 	}
 	var created struct {
 		SessionID     string `json:"sessionId"`
@@ -302,26 +302,26 @@ func TestCommandBridgeRunsClaudePrintWithConfigOptions(t *testing.T) {
 	if created.ConfigOptions[1].ID != "effort" || created.ConfigOptions[1].Category != "thought_level" {
 		t.Fatalf("effort option = %#v, want thought_level category", created.ConfigOptions[1])
 	}
-	if responses[3].Method != "session/update" {
-		t.Fatalf("fourth envelope method = %q, want session/update", responses[3].Method)
+	start := decodeAppUpdate(t, responses[3])
+	if start.Update.SessionUpdate != "tool_call" ||
+		start.Update.Status != "in_progress" ||
+		start.Update.ToolCallID == "" {
+		t.Fatalf("tool start = %#v, want running command", start)
 	}
-	var update struct {
-		Update struct {
-			Content struct {
-				Text string `json:"text"`
-			} `json:"content"`
-		} `json:"update"`
+	update := decodeAppUpdate(t, responses[4])
+	if update.Update.SessionUpdate != "agent_message_chunk" || decodeAppChunkText(t, update.Update.Content) != "claude answer" {
+		t.Fatalf("assistant update = %#v, want claude answer", update)
 	}
-	if err := json.Unmarshal(responses[3].Params, &update); err != nil {
-		t.Fatalf("decode update: %v", err)
-	}
-	if update.Update.Content.Text != "claude answer" {
-		t.Fatalf("assistant text = %q, want claude answer", update.Update.Content.Text)
+	finish := decodeAppUpdate(t, responses[5])
+	if finish.Update.SessionUpdate != "tool_call_update" ||
+		finish.Update.ToolCallID != start.Update.ToolCallID ||
+		finish.Update.Status != "completed" {
+		t.Fatalf("tool finish = %#v, want completed command", finish)
 	}
 	var prompt struct {
 		StopReason string `json:"stopReason"`
 	}
-	decodeAppResult(t, responses[4], &prompt)
+	decodeAppResult(t, responses[6], &prompt)
 	if prompt.StopReason != "end_turn" {
 		t.Fatalf("stop reason = %q, want end_turn", prompt.StopReason)
 	}
@@ -519,6 +519,38 @@ func decodeAppResult(t testing.TB, response appResponse, target any) {
 	if err := json.Unmarshal(response.Result, target); err != nil {
 		t.Fatalf("decode result: %v\n%s", err, string(response.Result))
 	}
+}
+
+type appSessionUpdate struct {
+	Update struct {
+		SessionUpdate string          `json:"sessionUpdate"`
+		ToolCallID    string          `json:"toolCallId"`
+		Status        string          `json:"status"`
+		Content       json.RawMessage `json:"content"`
+	} `json:"update"`
+}
+
+func decodeAppUpdate(t testing.TB, response appResponse) appSessionUpdate {
+	t.Helper()
+	if response.Method != "session/update" {
+		t.Fatalf("response method = %q, want session/update", response.Method)
+	}
+	var update appSessionUpdate
+	if err := json.Unmarshal(response.Params, &update); err != nil {
+		t.Fatalf("decode update: %v\n%s", err, string(response.Params))
+	}
+	return update
+}
+
+func decodeAppChunkText(t testing.TB, raw json.RawMessage) string {
+	t.Helper()
+	var content struct {
+		Text string `json:"text"`
+	}
+	if err := json.Unmarshal(raw, &content); err != nil {
+		t.Fatalf("decode chunk content: %v\n%s", err, string(raw))
+	}
+	return content.Text
 }
 
 func appRuntimeError(id json.RawMessage, code int, message string, data any) map[string]any {

@@ -1,6 +1,7 @@
 package claudecodeadapter_test
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -131,30 +132,33 @@ printf 'chunk two'
 			"prompt":    []map[string]any{{"type": "text", "text": "hello"}},
 		},
 	})
-	if len(responses) < 2 {
-		t.Fatalf("got %d responses, want streamed update(s) + prompt response: %#v", len(responses), responses)
+	if len(responses) < 4 {
+		t.Fatalf("got %d responses, want tool start + streamed update(s) + tool finish + prompt response: %#v", len(responses), responses)
+	}
+	start := decodeSessionUpdate(t, responses[0])
+	if start.Update.SessionUpdate != "tool_call" ||
+		start.Update.Status != "in_progress" ||
+		start.Update.ToolCallID == "" ||
+		start.Update.Title != "Run claude" ||
+		start.Update.RawInput["command"] == "" {
+		t.Fatalf("tool start = %#v, want native Claude command metadata", start)
 	}
 	var streamed strings.Builder
-	for i, response := range responses[:len(responses)-1] {
-		if response.Method != "session/update" {
-			t.Fatalf("response %d method = %q, want session/update", i, response.Method)
-		}
-		var update struct {
-			Update struct {
-				SessionUpdate string `json:"sessionUpdate"`
-				Content       struct {
-					Text string `json:"text"`
-				} `json:"content"`
-			} `json:"update"`
-		}
-		response.ParamsInto(t, &update)
+	for i, response := range responses[1 : len(responses)-2] {
+		update := decodeSessionUpdate(t, response)
 		if update.Update.SessionUpdate != "agent_message_chunk" {
 			t.Fatalf("response %d update = %#v, want agent_message_chunk", i, update.Update)
 		}
-		streamed.WriteString(update.Update.Content.Text)
+		streamed.WriteString(decodeChunkText(t, update.Update.Content))
 	}
 	if streamed.String() != "chunk one chunk two" {
 		t.Fatalf("streamed text = %q, want chunked command stdout", streamed.String())
+	}
+	finish := decodeSessionUpdate(t, responses[len(responses)-2])
+	if finish.Update.SessionUpdate != "tool_call_update" ||
+		finish.Update.ToolCallID != start.Update.ToolCallID ||
+		finish.Update.Status != "completed" {
+		t.Fatalf("tool finish = %#v, want completed native Claude command", finish)
 	}
 	var promptResult struct {
 		StopReason string `json:"stopReason"`
@@ -172,6 +176,38 @@ func TestPromptCommandRequiresWorkspace(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "session cwd is required") {
 		t.Fatalf("PromptCommand error = %v, want cwd required", err)
 	}
+}
+
+type sessionUpdate struct {
+	Update struct {
+		SessionUpdate string          `json:"sessionUpdate"`
+		ToolCallID    string          `json:"toolCallId"`
+		Title         string          `json:"title"`
+		Status        string          `json:"status"`
+		RawInput      map[string]any  `json:"rawInput"`
+		Content       json.RawMessage `json:"content"`
+	} `json:"update"`
+}
+
+func decodeSessionUpdate(t testing.TB, response acptest.Response) sessionUpdate {
+	t.Helper()
+	if response.Method != "session/update" {
+		t.Fatalf("response method = %q, want session/update", response.Method)
+	}
+	var update sessionUpdate
+	response.ParamsInto(t, &update)
+	return update
+}
+
+func decodeChunkText(t testing.TB, raw json.RawMessage) string {
+	t.Helper()
+	var content struct {
+		Text string `json:"text"`
+	}
+	if err := json.Unmarshal(raw, &content); err != nil {
+		t.Fatalf("decode chunk content: %v\n%s", err, string(raw))
+	}
+	return content.Text
 }
 
 func installFakeCommand(t testing.TB, name string, body string) {

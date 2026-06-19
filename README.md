@@ -96,7 +96,8 @@ By default, the root ACP server owns lightweight ACP sessions and runs each
 prompt through `claude --print` in the session workspace. The command-backed
 path exposes ACP config options for model and effort, passes only
 provider-specific environment variables through the shared process runner, and
-converts command stdout into ACP assistant text.
+converts command stdout into ACP assistant text while emitting a generic
+`tool_call` activity for the native Claude command execution.
 
 The root ACP server can also launch an explicit subprocess-backed ACP runtime
 with `--runtime-binary`, `--runtime-workdir`, and repeated `--runtime-arg`
