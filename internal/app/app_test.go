@@ -207,6 +207,42 @@ func TestRuntimeFlagsForwardInitializeClientCapabilities(t *testing.T) {
 	}
 }
 
+func TestRuntimeFlagsInheritClaudeEnvironmentPolicy(t *testing.T) {
+	t.Setenv("ANTHROPIC_API_KEY", "sk-claude-runtime")
+	t.Setenv("CLAUDE_CONFIG_DIR", "/tmp/claude-runtime-config")
+	t.Setenv("UNLISTED_AGENT_SECRET", "must-not-leak")
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	workdir := t.TempDir()
+	input := strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}` + "\n")
+
+	code := Run([]string{
+		"--runtime-binary", os.Args[0],
+		"--runtime-workdir", workdir,
+		"--runtime-arg=-test.run=TestAppRuntimeHelper",
+		"--runtime-arg=--",
+		"--runtime-arg=app-runtime-helper",
+		"--runtime-arg=require-claude-runtime-env",
+	}, input, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("Run returned %d, want 0; stderr=%q stdout=%q", code, stderr.String(), stdout.String())
+	}
+
+	responses := decodeAppResponses(t, stdout.Bytes())
+	if len(responses) != 1 {
+		t.Fatalf("got %d envelopes, want initialize response\n%s", len(responses), stdout.String())
+	}
+	var initialize struct {
+		AgentInfo struct {
+			Name string `json:"name"`
+		} `json:"agentInfo"`
+	}
+	decodeAppResult(t, responses[0], &initialize)
+	if initialize.AgentInfo.Name != "app-helper-runtime" {
+		t.Fatalf("initialize agent name = %q, want app-helper-runtime", initialize.AgentInfo.Name)
+	}
+}
+
 func TestRuntimeBinaryRequiresRuntimeWorkdir(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -248,6 +284,20 @@ func TestAppRuntimeHelper(t *testing.T) {
 	}
 	requireTerminalCapability := hasArg(os.Args, "require-terminal-capability")
 	requireAuthTerminalCapability := hasArg(os.Args, "require-auth-terminal-capability")
+	if hasArg(os.Args, "require-claude-runtime-env") {
+		if os.Getenv("ANTHROPIC_API_KEY") != "sk-claude-runtime" {
+			fmt.Fprintf(os.Stderr, "ANTHROPIC_API_KEY=%q\n", os.Getenv("ANTHROPIC_API_KEY"))
+			os.Exit(7)
+		}
+		if os.Getenv("CLAUDE_CONFIG_DIR") != "/tmp/claude-runtime-config" {
+			fmt.Fprintf(os.Stderr, "CLAUDE_CONFIG_DIR=%q\n", os.Getenv("CLAUDE_CONFIG_DIR"))
+			os.Exit(8)
+		}
+		if os.Getenv("UNLISTED_AGENT_SECRET") != "" {
+			fmt.Fprint(os.Stderr, "UNLISTED_AGENT_SECRET leaked\n")
+			os.Exit(9)
+		}
+	}
 	decoder := json.NewDecoder(os.Stdin)
 	encoder := json.NewEncoder(os.Stdout)
 	for {
