@@ -3,6 +3,8 @@ github.com/coder/acp-go-sdk v0.13.5/go.mod h1:yKzM/3R9uELp4+nBAwwtkS0aN1FOFjo11C
 github.com/cpuguy83/go-md2man/v2 v2.0.6/go.mod h1:oOW0eioCTA6cOiMLiUPZOpcVxMig6NIQQ7OS05n1F4g=
 github.com/hecatehq/acp-adapter-kit v0.0.0-20260619180608-663b0372d1cd h1:Oc89MewEjWSs9S97d/oqieZ41fBGRbnVkjRhBAmcbf4=
 github.com/hecatehq/acp-adapter-kit v0.0.0-20260619180608-663b0372d1cd/go.mod h1:7Wl6fSNPnS2t7EgrLspkEQ5YGjp+yaStebHEHIRjqD8=
+github.com/hecatehq/acp-adapter-kit v0.0.0-20260619190011-ab882c077013 h1:X5T6hgS34c17LVrBNuRyyCMwAQ3phNmrC7AEwgoX0fI=
+github.com/hecatehq/acp-adapter-kit v0.0.0-20260619190011-ab882c077013/go.mod h1:7Wl6fSNPnS2t7EgrLspkEQ5YGjp+yaStebHEHIRjqD8=
 github.com/inconshreveable/mousetrap v1.1.0 h1:wN+x4NVGpMsO7ErUn/mUI3vEoE6Jt13X2s0bqwp9tc8=
 github.com/inconshreveable/mousetrap v1.1.0/go.mod h1:vpF70FUmC8bwa3OWnCshd2FqLfsEA9PFc4w1p2J65bw=
 github.com/russross/blackfriday/v2 v2.1.0/go.mod h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQDYRxCVz55jmeOWTM=

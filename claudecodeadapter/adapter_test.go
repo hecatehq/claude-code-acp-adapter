@@ -21,8 +21,8 @@ func TestInfoPinsClaudeCapabilities(t *testing.T) {
 	if info.Name != claudecodeadapter.Name || info.Title != claudecodeadapter.Title || info.Version != "1.2.3" {
 		t.Fatalf("info = %#v, want Claude Code adapter metadata", info)
 	}
-	if !info.Capabilities.Images || !info.Capabilities.EmbeddedContext || !info.Capabilities.MCPHTTP || !info.Capabilities.MCPSSE {
-		t.Fatalf("capabilities = %#v, want image + embedded context + MCP HTTP/SSE", info.Capabilities)
+	if !info.Capabilities.Images || !info.Capabilities.EmbeddedContext || !info.Capabilities.MCPHTTP || !info.Capabilities.MCPSSE || !info.Capabilities.LoadSession {
+		t.Fatalf("capabilities = %#v, want image + embedded context + MCP HTTP/SSE + load session", info.Capabilities)
 	}
 	if claudecodeadapter.NewServer("1.2.3") == nil {
 		t.Fatal("NewServer returned nil")
@@ -32,13 +32,28 @@ func TestInfoPinsClaudeCapabilities(t *testing.T) {
 	}
 }
 
+func TestInitializeAdvertisesLoadSession(t *testing.T) {
+	client := acptest.NewClient(t, claudecodeadapter.NewServer("test"))
+
+	resp := client.Request("initialize", map[string]any{})
+	var result struct {
+		AgentCapabilities struct {
+			LoadSession bool `json:"loadSession"`
+		} `json:"agentCapabilities"`
+	}
+	resp.ResultInto(t, &result)
+	if !result.AgentCapabilities.LoadSession {
+		t.Fatal("loadSession = false, want true")
+	}
+}
+
 func TestNewCLISpecExposesLibraryContract(t *testing.T) {
 	spec := claudecodeadapter.NewCLISpec("2.0.0", nil, nil, nil)
 
 	if spec.Info.Name != claudecodeadapter.Name || spec.Info.Version != "2.0.0" {
 		t.Fatalf("spec.Info = %#v", spec.Info)
 	}
-	if spec.Command == nil || spec.Command.BuildPrompt == nil || len(spec.Command.Options) != 2 {
+	if spec.Command == nil || spec.Command.BuildPrompt == nil || len(spec.Command.Options) != 2 || !spec.Command.IncludeTranscript {
 		t.Fatalf("command spec = %#v, want command-backed bridge with config options", spec.Command)
 	}
 	if spec.Doctor == nil || spec.Doctor.Binary != "claude" {

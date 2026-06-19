@@ -39,12 +39,16 @@ Implemented:
   MCP-over-ACP message payloads
 - command-backed native Claude Code path using `claude --print`
 - ACP model and effort config options for the command-backed path
+- in-memory command-backed session load/resume/fork plus bounded transcript
+  replay for multi-turn continuity while the adapter process is alive
+- streamed command stdout chunks and generic command `tool_call` activity
 - CI and tag-driven release packaging for unsigned alpha binaries
 
 Not implemented yet:
 
 - deeper Claude Code / Claude Agent SDK integration beyond `claude --print`
-- vendor-specific persistent session semantics
+- vendor-specific durable/native persistent session semantics across adapter
+  process restarts
 - vendor-specific prompt/tool/permission/elicitation mapping
 - runtime config/auth/model discovery and orphan-result handling
 - production signing/provenance for release artifacts
@@ -97,7 +101,11 @@ prompt through `claude --print` in the session workspace. The command-backed
 path exposes ACP config options for model and effort, passes only
 provider-specific environment variables through the shared process runner, and
 converts command stdout into ACP assistant text while emitting a generic
-`tool_call` activity for the native Claude command execution.
+`tool_call` activity for the native Claude command execution. The session state
+is in-memory: `session/load`, `session/resume`, and `session/fork` work while
+the adapter process is alive, and later prompts receive a bounded transcript
+prelude so command-backed turns keep conversational context without claiming
+vendor-native durable history.
 
 The root ACP server can also launch an explicit subprocess-backed ACP runtime
 with `--runtime-binary`, `--runtime-workdir`, and repeated `--runtime-arg`
