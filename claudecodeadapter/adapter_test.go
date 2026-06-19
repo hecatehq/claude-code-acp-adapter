@@ -45,6 +45,30 @@ func TestNewCLISpecExposesLibraryContract(t *testing.T) {
 	}
 }
 
+func TestPromptCommandUsesNativeClaudeCLIOnly(t *testing.T) {
+	got, err := claudecodeadapter.PromptCommand(commandbridge.Session{
+		CWD: "/work",
+	}, runtimeacp.PromptParams{
+		Prompt: []runtimeacp.ContentBlock{{Type: "text", Text: "hello claude"}},
+	})
+	if err != nil {
+		t.Fatalf("PromptCommand: %v", err)
+	}
+	assertNoPackageRunnerCommand(t, got.Command)
+	if got.Command != "claude" {
+		t.Fatalf("process command = %q, want native claude CLI", got.Command)
+	}
+
+	spec := claudecodeadapter.NewCLISpec("2.0.0", nil, nil, nil)
+	if spec.Doctor == nil {
+		t.Fatal("doctor spec is nil")
+	}
+	assertNoPackageRunnerCommand(t, spec.Doctor.Binary)
+	if spec.Doctor.Binary != "claude" {
+		t.Fatalf("doctor binary = %q, want native claude CLI", spec.Doctor.Binary)
+	}
+}
+
 func TestPromptCommandBuildsClaudePrint(t *testing.T) {
 	got, err := claudecodeadapter.PromptCommand(commandbridge.Session{
 		CWD:                   "/work",
@@ -79,5 +103,13 @@ func TestPromptCommandRequiresWorkspace(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), "session cwd is required") {
 		t.Fatalf("PromptCommand error = %v, want cwd required", err)
+	}
+}
+
+func assertNoPackageRunnerCommand(t testing.TB, command string) {
+	t.Helper()
+	switch command {
+	case "npx", "npm", "node", "bun", "sh", "bash", "zsh", "cmd", "powershell", "pwsh":
+		t.Fatalf("command = %q, want fixed native CLI without package runner or shell", command)
 	}
 }

@@ -2,18 +2,18 @@
 
 Neutral Go ACP adapter for Claude Code.
 
-This repository is an alpha Go ACP adapter for Claude Code. It is intended to
-replace runtime npm bridge launchers with a small, auditable binary that speaks
-ACP over stdio. The adapter can run Claude Code prompts through its native
-command bridge, but full parity with the previous Claude Agent ACP adapter is
-still in progress.
+This repository is an alpha Go ACP adapter for Claude Code. It runs as a small,
+auditable binary that speaks ACP over stdio. The adapter can run Claude Code
+prompts through its native command bridge, but full parity with the previous
+Claude Agent ACP adapter is still in progress.
 
 ## Goals
 
 - Speak standard Agent Client Protocol over stdio.
 - Keep the adapter independent from Hecate internals.
-- Avoid runtime `npx`, shell wrappers, and broad environment inheritance.
-- Preserve the important behavior exposed by the current Claude Agent ACP
+- Avoid package-manager launchers, shell wrappers, and broad environment
+  inheritance.
+- Preserve the important behavior exposed by the previous Claude Agent ACP
   adapter: sessions, settings, auth, model/config options, permission requests,
   MCP servers, elicitation, tool updates, terminal output, cancellation, and
   resume/load behavior.
@@ -26,7 +26,7 @@ Implemented:
 - stdlib-only JSON-RPC/NDJSON ACP transport scaffold
 - `initialize` response with adapter metadata
 - structured errors for unimplemented methods
-- source-review notes for the current npm/TypeScript adapter stack
+- source-review notes for the previous adapter behavior
 - unit tests for the protocol scaffold
 - `doctor` command for probing the local Claude Code binary boundary
 - process-backed runtime launcher seam
@@ -61,9 +61,9 @@ The binary remains the primary integration mode. Hosts that need an embedded
 adapter can import
 `github.com/hecatehq/claude-code-acp-adapter/claudecodeadapter` to build the
 same ACP server, info/options, CLI spec, config options, environment allowlists,
-and Claude Code prompt command without shelling out to `claude-code-acp-adapter`. The
-embedded path still launches the underlying `claude` CLI for prompts; it only
-removes the extra adapter process boundary.
+and Claude Code prompt command without shelling out to
+`claude-code-acp-adapter`. The embedded path still launches the underlying
+`claude` CLI for prompts; it only removes the extra adapter process boundary.
 
 ```sh
 make release-check
@@ -76,7 +76,8 @@ go run ./cmd/claude-code-acp-adapter doctor
 ```
 
 See [docs/TESTING.md](docs/TESTING.md) for what is covered today and what must
-be covered before this adapter can replace the current Claude Agent ACP bridge.
+be covered before this adapter can be used as the default production Claude
+Agent ACP bridge.
 See [docs/RELEASE.md](docs/RELEASE.md) for the tag-driven release flow.
 
 ## CLI Contract
@@ -108,6 +109,5 @@ command-backed path and are mostly useful for protocol parity testing.
 ## Source Review
 
 Before implementing the real bridge, read [docs/SOURCE_REVIEW.md](docs/SOURCE_REVIEW.md).
-It records the behavior found in the current npm package and upstream adapter
-source that this project needs to preserve or deliberately replace.
-ACP adapter for running Claude Code over stdio
+It records historical package/source behavior that this project needs to
+preserve or deliberately replace.
