@@ -284,8 +284,8 @@ func TestCommandBridgeRunsClaudePrintWithConfigOptions(t *testing.T) {
 		t.Fatalf("Run returned %d, want 0; stderr=%q stdout=%q", code, stderr.String(), stdout.String())
 	}
 	responses := decodeAppResponses(t, stdout.Bytes())
-	if len(responses) != 8 {
-		t.Fatalf("got %d envelopes, want session/new, three config updates, tool start, assistant update, tool finish, prompt result\n%s", len(responses), stdout.String())
+	if len(responses) != 11 {
+		t.Fatalf("got %d envelopes, want session/new, three config update notifications + responses, tool start, assistant update, tool finish, prompt result\n%s", len(responses), stdout.String())
 	}
 	var created struct {
 		SessionID     string `json:"sessionId"`
@@ -308,17 +308,31 @@ func TestCommandBridgeRunsClaudePrintWithConfigOptions(t *testing.T) {
 	if created.ConfigOptions[2].ID != "permission_mode" || created.ConfigOptions[2].Category != "permission" || created.ConfigOptions[2].CurrentValue != "dontAsk" {
 		t.Fatalf("permission option = %#v, want permission category with dontAsk default", created.ConfigOptions[2])
 	}
-	start := decodeAppUpdate(t, responses[4])
+	assertConfigOptionUpdate(t, responses[1], "model", "sonnet")
+	var modelSet struct {
+		ConfigOptions []struct {
+			ID           string `json:"id"`
+			CurrentValue string `json:"currentValue"`
+		} `json:"configOptions"`
+	}
+	decodeAppResult(t, responses[2], &modelSet)
+	if len(modelSet.ConfigOptions) != 3 || modelSet.ConfigOptions[0].CurrentValue != "sonnet" {
+		t.Fatalf("model set result = %#v, want selected model", modelSet.ConfigOptions)
+	}
+	assertConfigOptionUpdate(t, responses[3], "effort", "high")
+	assertConfigOptionUpdate(t, responses[5], "permission_mode", "plan")
+
+	start := decodeAppUpdate(t, responses[7])
 	if start.Update.SessionUpdate != "tool_call" ||
 		start.Update.Status != "in_progress" ||
 		start.Update.ToolCallID == "" {
 		t.Fatalf("tool start = %#v, want running command", start)
 	}
-	update := decodeAppUpdate(t, responses[5])
+	update := decodeAppUpdate(t, responses[8])
 	if update.Update.SessionUpdate != "agent_message_chunk" || decodeAppChunkText(t, update.Update.Content) != "claude answer" {
 		t.Fatalf("assistant update = %#v, want claude answer", update)
 	}
-	finish := decodeAppUpdate(t, responses[6])
+	finish := decodeAppUpdate(t, responses[9])
 	if finish.Update.SessionUpdate != "tool_call_update" ||
 		finish.Update.ToolCallID != start.Update.ToolCallID ||
 		finish.Update.Status != "completed" {
@@ -327,7 +341,7 @@ func TestCommandBridgeRunsClaudePrintWithConfigOptions(t *testing.T) {
 	var prompt struct {
 		StopReason string `json:"stopReason"`
 	}
-	decodeAppResult(t, responses[7], &prompt)
+	decodeAppResult(t, responses[10], &prompt)
 	if prompt.StopReason != "end_turn" {
 		t.Fatalf("stop reason = %q, want end_turn", prompt.StopReason)
 	}
@@ -533,6 +547,10 @@ type appSessionUpdate struct {
 		ToolCallID    string          `json:"toolCallId"`
 		Status        string          `json:"status"`
 		Content       json.RawMessage `json:"content"`
+		ConfigOptions []struct {
+			ID           string `json:"id"`
+			CurrentValue string `json:"currentValue"`
+		} `json:"configOptions"`
 	} `json:"update"`
 }
 
@@ -546,6 +564,23 @@ func decodeAppUpdate(t testing.TB, response appResponse) appSessionUpdate {
 		t.Fatalf("decode update: %v\n%s", err, string(response.Params))
 	}
 	return update
+}
+
+func assertConfigOptionUpdate(t testing.TB, response appResponse, optionID, currentValue string) {
+	t.Helper()
+	update := decodeAppUpdate(t, response)
+	if update.Update.SessionUpdate != "config_option_update" {
+		t.Fatalf("session update = %q, want config_option_update", update.Update.SessionUpdate)
+	}
+	for _, option := range update.Update.ConfigOptions {
+		if option.ID == optionID {
+			if option.CurrentValue != currentValue {
+				t.Fatalf("config option %q current value = %q, want %q", optionID, option.CurrentValue, currentValue)
+			}
+			return
+		}
+	}
+	t.Fatalf("config options = %#v, missing %q", update.Update.ConfigOptions, optionID)
 }
 
 func decodeAppChunkText(t testing.TB, raw json.RawMessage) string {
