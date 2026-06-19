@@ -264,7 +264,9 @@ func TestCommandBridgeRunsClaudePrintWithConfigOptions(t *testing.T) {
 	spec.Command.Runner = commandbridge.RunnerFunc(func(_ context.Context, got adapterprocess.Spec) (adapterprocess.Result, error) {
 		wantArgs := []string{
 			"--print",
-			"--output-format", "text",
+			"--output-format", "stream-json",
+			"--include-partial-messages",
+			"--verbose",
 			"--permission-mode", "plan",
 			"--add-dir", extraDir,
 			"--model", "sonnet",

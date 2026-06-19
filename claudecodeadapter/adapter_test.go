@@ -53,7 +53,7 @@ func TestNewCLISpecExposesLibraryContract(t *testing.T) {
 	if spec.Info.Name != claudecodeadapter.Name || spec.Info.Version != "2.0.0" {
 		t.Fatalf("spec.Info = %#v", spec.Info)
 	}
-	if spec.Command == nil || spec.Command.BuildPrompt == nil || len(spec.Command.Options) != 3 || !spec.Command.IncludeTranscript {
+	if spec.Command == nil || spec.Command.BuildPrompt == nil || spec.Command.NewStreamParser == nil || len(spec.Command.Options) != 3 || !spec.Command.IncludeTranscript {
 		t.Fatalf("command spec = %#v, want command-backed bridge with config options", spec.Command)
 	}
 	if spec.Doctor == nil || spec.Doctor.Binary != "claude" {
@@ -106,7 +106,9 @@ func TestPromptCommandBuildsClaudePrint(t *testing.T) {
 	}
 	wantArgs := []string{
 		"--print",
-		"--output-format", "text",
+		"--output-format", "stream-json",
+		"--include-partial-messages",
+		"--verbose",
 		"--permission-mode", "plan",
 		"--add-dir", "/extra",
 		"--model", "sonnet",
@@ -124,9 +126,11 @@ if [ "$1" != "--print" ]; then
   echo "unexpected command: $*" >&2
   exit 64
 fi
-printf 'chunk one '
+printf '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"tool-1","name":"Bash","input":{"command":"go test ./..."}}]}}\n'
 sleep 0.05
-printf 'chunk two'
+printf '{"type":"assistant","message":{"content":[{"type":"thinking","id":"thought-1","thinking":"checking"},{"type":"text","text":"chunk one chunk two"}]}}\n'
+printf '{"type":"result","usage":{"input_tokens":10,"output_tokens":5,"context_window":100}}\n'
+printf '{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"tool-1","content":"ok"}]}}\n'
 `)
 	client := acptest.NewClient(t, claudecodeadapter.NewServer("test"))
 	client.Request("initialize", map[string]any{})
@@ -159,21 +163,37 @@ printf 'chunk two'
 		start.Update.RawInput["command"] == "" {
 		t.Fatalf("tool start = %#v, want native Claude command metadata", start)
 	}
-	var streamed strings.Builder
-	for i, response := range responses[1 : len(responses)-2] {
-		update := decodeSessionUpdate(t, response)
-		if update.Update.SessionUpdate != "agent_message_chunk" {
-			t.Fatalf("response %d update = %#v, want agent_message_chunk", i, update.Update)
-		}
-		streamed.WriteString(decodeChunkText(t, update.Update.Content))
+	innerStart := decodeSessionUpdate(t, responses[1])
+	if innerStart.Update.SessionUpdate != "tool_call" ||
+		innerStart.Update.ToolCallID != "tool-1" ||
+		innerStart.Update.Kind != "execute" ||
+		innerStart.Update.Status != "in_progress" {
+		t.Fatalf("inner tool start = %#v, want parsed Claude tool start", innerStart)
 	}
-	if streamed.String() != "chunk one chunk two" {
-		t.Fatalf("streamed text = %q, want chunked command stdout", streamed.String())
+	thought := decodeSessionUpdate(t, responses[2])
+	if thought.Update.SessionUpdate != "agent_thought_chunk" || decodeChunkText(t, thought.Update.Content) != "checking" {
+		t.Fatalf("thought = %#v, want parsed thinking chunk", thought)
+	}
+	message := decodeSessionUpdate(t, responses[3])
+	if message.Update.SessionUpdate != "agent_message_chunk" || decodeChunkText(t, message.Update.Content) != "chunk one chunk two" {
+		t.Fatalf("message = %#v, want parsed Claude answer", message)
+	}
+	usage := decodeSessionUpdate(t, responses[4])
+	if usage.Update.SessionUpdate != "usage_update" || usage.Update.Used != 15 || usage.Update.Size != 100 {
+		t.Fatalf("usage = %#v, want parsed Claude usage", usage)
+	}
+	innerFinish := decodeSessionUpdate(t, responses[5])
+	if innerFinish.Update.SessionUpdate != "tool_call_update" ||
+		innerFinish.Update.ToolCallID != "tool-1" ||
+		innerFinish.Update.Status != "completed" ||
+		!strings.Contains(string(innerFinish.Update.Content), "ok") {
+		t.Fatalf("inner tool finish = %#v, want parsed Claude tool finish", innerFinish)
 	}
 	finish := decodeSessionUpdate(t, responses[len(responses)-2])
 	if finish.Update.SessionUpdate != "tool_call_update" ||
 		finish.Update.ToolCallID != start.Update.ToolCallID ||
-		finish.Update.Status != "completed" {
+		finish.Update.Status != "completed" ||
+		len(finish.Update.Content) != 0 {
 		t.Fatalf("tool finish = %#v, want completed native Claude command", finish)
 	}
 	var promptResult struct {
@@ -194,13 +214,63 @@ func TestPromptCommandRequiresWorkspace(t *testing.T) {
 	}
 }
 
+func TestClaudeStreamParserMapsJSONL(t *testing.T) {
+	parser := claudecodeadapter.NewStreamParser(commandbridge.Session{}, runtimeacp.PromptParams{})
+	chunks := []string{
+		`{"type":"assistant","message":{"content":[{"type":"tool_use","id":"tool-1","name":"Edit","input":{"file_path":"main.go"}}]}}` + "\n",
+		`{"type":"assistant","message":{"content":[{"type":"thinking","id":"think-1","thinking":"planning"},{"type":"text","text":"done"}]}}` + "\n",
+		`{"type":"result","result":"done","usage":{"input_tokens":2,"cache_creation_input_tokens":3,"cache_read_input_tokens":5,"output_tokens":7,"thinking_tokens":11,"context_window":1000}}` + "\n",
+		`{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"tool-1","content":"patched","is_error":false}]}}` + "\n",
+	}
+	var events []commandbridge.StreamEvent
+	for _, chunk := range chunks {
+		parsed, err := parser.Parse([]byte(chunk))
+		if err != nil {
+			t.Fatalf("Parse returned error: %v", err)
+		}
+		events = append(events, parsed...)
+	}
+	flushed, err := parser.Flush()
+	if err != nil {
+		t.Fatalf("Flush returned error: %v", err)
+	}
+	events = append(events, flushed...)
+	if len(events) != 5 {
+		t.Fatalf("events len = %d, want 5: %#v", len(events), events)
+	}
+	if events[0].Update["sessionUpdate"] != "tool_call" ||
+		events[0].Update["toolCallId"] != "tool-1" ||
+		events[0].Update["kind"] != "edit" {
+		t.Fatalf("tool start = %#v, want edit tool start", events[0].Update)
+	}
+	if events[1].Update["sessionUpdate"] != "agent_thought_chunk" {
+		t.Fatalf("thought = %#v, want thinking chunk", events[1].Update)
+	}
+	if events[2].Update["sessionUpdate"] != "agent_message_chunk" || parser.Transcript() != "done" {
+		t.Fatalf("message = %#v transcript=%q, want answer transcript", events[2].Update, parser.Transcript())
+	}
+	if events[3].Update["sessionUpdate"] != "usage_update" ||
+		events[3].Update["used"] != 28 ||
+		events[3].Update["size"] != 1000 {
+		t.Fatalf("usage = %#v, want summed usage", events[3].Update)
+	}
+	if events[4].Update["sessionUpdate"] != "tool_call_update" ||
+		events[4].Update["toolCallId"] != "tool-1" ||
+		events[4].Update["status"] != "completed" {
+		t.Fatalf("tool finish = %#v, want completed tool", events[4].Update)
+	}
+}
+
 type sessionUpdate struct {
 	Update struct {
 		SessionUpdate string          `json:"sessionUpdate"`
 		ToolCallID    string          `json:"toolCallId"`
 		Title         string          `json:"title"`
+		Kind          string          `json:"kind"`
 		Status        string          `json:"status"`
 		RawInput      map[string]any  `json:"rawInput"`
+		Used          int             `json:"used"`
+		Size          int             `json:"size"`
 		Content       json.RawMessage `json:"content"`
 	} `json:"update"`
 }

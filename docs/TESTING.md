@@ -125,11 +125,11 @@ tool/permission/elicitation parity.
   bridge
 - root ACP native command bridge: session creation with Claude model/effort
   config options, permission-mode config option, config updates,
-  `claude --print` argv construction, additional workspace directories,
-  assistant text updates from command stdout, streamed stdout chunks, generic
-  command `tool_call` activity, in-memory
-  load/resume/fork capability, bounded transcript replay for later command
-  prompts, and prompt completion
+  `claude --print --output-format stream-json` argv construction, additional
+  workspace directories, streamed JSONL parsing into ACP assistant text,
+  thinking, tool-call, and usage updates, generic command `tool_call` activity
+  for the outer Claude process, in-memory load/resume/fork capability, bounded
+  transcript replay for later command prompts, and prompt completion
 - Coder ACP SDK compatibility guardrails for the adopted protocol primitives:
   JSON-RPC error shape, default initialize protocol version, and selected
   runtime ACP request JSON shapes
@@ -145,7 +145,7 @@ adapter to this one:
   across adapter process restarts
 - Claude-specific session fork persistence/history semantics beyond in-memory
   command-backed state
-- terminal prompt results beyond command stdout streaming
+- terminal prompt results beyond parsed command stream updates
 - real vendor-runtime normal cancellation, wedged-runtime forced cancellation, and no
   double-settle behavior
 - auth methods and terminal auth behavior in local/remote environments

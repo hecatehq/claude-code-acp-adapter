@@ -65,6 +65,7 @@ func CommandSpec() *commandbridge.Spec {
 		Options:           ConfigOptions(),
 		IncludeTranscript: true,
 		BuildPrompt:       PromptCommand,
+		NewStreamParser:   NewStreamParser,
 	}
 }
 
@@ -124,7 +125,9 @@ func PromptCommand(session commandbridge.Session, params runtimeacp.PromptParams
 	}
 	args := []string{
 		"--print",
-		"--output-format", "text",
+		"--output-format", "stream-json",
+		"--include-partial-messages",
+		"--verbose",
 		"--permission-mode", selectedPermissionMode(session),
 	}
 	for _, dir := range session.AdditionalDirectories {
