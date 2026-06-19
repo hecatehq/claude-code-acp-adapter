@@ -57,6 +57,14 @@ and fake-runtime test code lives in
 focused on the Claude Code-specific CLI boundary, doctor defaults, docs, release
 workflow, and vendor behavior.
 
+The binary remains the primary integration mode. Hosts that need an embedded
+adapter can import
+`github.com/hecatehq/claude-code-acp-adapter/claudecodeadapter` to build the
+same ACP server, info/options, CLI spec, config options, environment allowlists,
+and Claude Code prompt command without shelling out to `claude-code-acp-adapter`. The
+embedded path still launches the underlying `claude` CLI for prompts; it only
+removes the extra adapter process boundary.
+
 ```sh
 make release-check
 make snapshot
