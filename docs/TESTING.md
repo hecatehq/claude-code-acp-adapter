@@ -102,7 +102,8 @@ tool/permission/elicitation parity.
 - ACP server-to-runtime bridge coverage for session fork and MCP message
   forwarding
 - ACP bridge forwarding for dynamic `session/update` payloads such as
-  `available_commands_update` and `config_option_update`
+  `available_commands_update`, `config_option_update`, and
+  `session_info_update`
 - ACP bridge forwarding for runtime child requests that require client
   responses, including returning the client result to the child runtime
 - ACP bridge forwarding for runtime MCP child requests, including

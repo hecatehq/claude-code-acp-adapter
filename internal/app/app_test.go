@@ -284,8 +284,8 @@ func TestCommandBridgeRunsClaudePrintWithConfigOptions(t *testing.T) {
 		t.Fatalf("Run returned %d, want 0; stderr=%q stdout=%q", code, stderr.String(), stdout.String())
 	}
 	responses := decodeAppResponses(t, stdout.Bytes())
-	if len(responses) != 11 {
-		t.Fatalf("got %d envelopes, want session/new, three config update notifications + responses, tool start, assistant update, tool finish, prompt result\n%s", len(responses), stdout.String())
+	if len(responses) != 12 {
+		t.Fatalf("got %d envelopes, want session/new, three config update notifications + responses, tool start, assistant update, tool finish, session info, prompt result\n%s", len(responses), stdout.String())
 	}
 	var created struct {
 		SessionID     string `json:"sessionId"`
@@ -338,10 +338,16 @@ func TestCommandBridgeRunsClaudePrintWithConfigOptions(t *testing.T) {
 		finish.Update.Status != "completed" {
 		t.Fatalf("tool finish = %#v, want completed command", finish)
 	}
+	info := decodeAppUpdate(t, responses[10])
+	if info.Update.SessionUpdate != "session_info_update" ||
+		info.Update.Title != "hello claude" ||
+		info.Update.UpdatedAt == "" {
+		t.Fatalf("session info = %#v, want transcript metadata", info)
+	}
 	var prompt struct {
 		StopReason string `json:"stopReason"`
 	}
-	decodeAppResult(t, responses[10], &prompt)
+	decodeAppResult(t, responses[11], &prompt)
 	if prompt.StopReason != "end_turn" {
 		t.Fatalf("stop reason = %q, want end_turn", prompt.StopReason)
 	}
@@ -547,6 +553,8 @@ type appSessionUpdate struct {
 		ToolCallID    string          `json:"toolCallId"`
 		Status        string          `json:"status"`
 		Content       json.RawMessage `json:"content"`
+		Title         string          `json:"title"`
+		UpdatedAt     string          `json:"updatedAt"`
 		ConfigOptions []struct {
 			ID           string `json:"id"`
 			CurrentValue string `json:"currentValue"`
