@@ -124,9 +124,10 @@ tool/permission/elicitation parity.
   allowlist inheritance, and runtime-flag precedence over the native command
   bridge
 - root ACP native command bridge: session creation with Claude model/effort
-  config options, config updates, `claude --print` argv construction,
-  additional workspace directories, assistant text updates from command stdout,
-  streamed stdout chunks, generic command `tool_call` activity, in-memory
+  config options, permission-mode config option, config updates,
+  `claude --print` argv construction, additional workspace directories,
+  assistant text updates from command stdout, streamed stdout chunks, generic
+  command `tool_call` activity, in-memory
   load/resume/fork capability, bounded transcript replay for later command
   prompts, and prompt completion
 - Coder ACP SDK compatibility guardrails for the adopted protocol primitives:
@@ -152,6 +153,8 @@ adapter to this one:
 - settings resolution, settings trust filtering, and settings reloads
 - model allowlists, model alias discovery, and permission-mode availability by
   model beyond the initial static command-backed selectors
+- provider-native permission request/event mapping beyond the selected Claude
+  Code permission mode
 - AskUserQuestion and MCP elicitation forms
 - shell, file, edit, grep, glob, web, MCP, TODO, task, plan, memory, and
   terminal-output tool mappings

@@ -256,7 +256,8 @@ func TestCommandBridgeRunsClaudePrintWithConfigOptions(t *testing.T) {
 		`{"jsonrpc":"2.0","id":1,"method":"session/new","params":{"cwd":"` + workdir + `","additionalDirectories":["` + extraDir + `"]}}`,
 		`{"jsonrpc":"2.0","id":2,"method":"session/set_config_option","params":{"sessionId":"session-1","configId":"model","value":"sonnet"}}`,
 		`{"jsonrpc":"2.0","id":3,"method":"session/set_config_option","params":{"sessionId":"session-1","configId":"effort","value":"high"}}`,
-		`{"jsonrpc":"2.0","id":4,"method":"session/prompt","params":{"sessionId":"session-1","prompt":[{"type":"text","text":"hello claude"}]}}`,
+		`{"jsonrpc":"2.0","id":4,"method":"session/set_config_option","params":{"sessionId":"session-1","configId":"permission_mode","value":"plan"}}`,
+		`{"jsonrpc":"2.0","id":5,"method":"session/prompt","params":{"sessionId":"session-1","prompt":[{"type":"text","text":"hello claude"}]}}`,
 	}, "\n") + "\n")
 	spec := adapterSpec(input, &stdout, &stderr)
 	spec.Command.NewID = func() string { return "session-1" }
@@ -264,7 +265,7 @@ func TestCommandBridgeRunsClaudePrintWithConfigOptions(t *testing.T) {
 		wantArgs := []string{
 			"--print",
 			"--output-format", "text",
-			"--permission-mode", "dontAsk",
+			"--permission-mode", "plan",
 			"--add-dir", extraDir,
 			"--model", "sonnet",
 			"--effort", "high",
@@ -281,8 +282,8 @@ func TestCommandBridgeRunsClaudePrintWithConfigOptions(t *testing.T) {
 		t.Fatalf("Run returned %d, want 0; stderr=%q stdout=%q", code, stderr.String(), stdout.String())
 	}
 	responses := decodeAppResponses(t, stdout.Bytes())
-	if len(responses) != 7 {
-		t.Fatalf("got %d envelopes, want session/new, two config updates, tool start, assistant update, tool finish, prompt result\n%s", len(responses), stdout.String())
+	if len(responses) != 8 {
+		t.Fatalf("got %d envelopes, want session/new, three config updates, tool start, assistant update, tool finish, prompt result\n%s", len(responses), stdout.String())
 	}
 	var created struct {
 		SessionID     string `json:"sessionId"`
@@ -293,8 +294,8 @@ func TestCommandBridgeRunsClaudePrintWithConfigOptions(t *testing.T) {
 		} `json:"configOptions"`
 	}
 	decodeAppResult(t, responses[0], &created)
-	if created.SessionID != "session-1" || len(created.ConfigOptions) != 2 {
-		t.Fatalf("created session = %#v, want id and two config options", created)
+	if created.SessionID != "session-1" || len(created.ConfigOptions) != 3 {
+		t.Fatalf("created session = %#v, want id and three config options", created)
 	}
 	if created.ConfigOptions[0].ID != "model" || created.ConfigOptions[0].Category != "model" {
 		t.Fatalf("model option = %#v, want model category", created.ConfigOptions[0])
@@ -302,17 +303,20 @@ func TestCommandBridgeRunsClaudePrintWithConfigOptions(t *testing.T) {
 	if created.ConfigOptions[1].ID != "effort" || created.ConfigOptions[1].Category != "thought_level" {
 		t.Fatalf("effort option = %#v, want thought_level category", created.ConfigOptions[1])
 	}
-	start := decodeAppUpdate(t, responses[3])
+	if created.ConfigOptions[2].ID != "permission_mode" || created.ConfigOptions[2].Category != "permission" || created.ConfigOptions[2].CurrentValue != "dontAsk" {
+		t.Fatalf("permission option = %#v, want permission category with dontAsk default", created.ConfigOptions[2])
+	}
+	start := decodeAppUpdate(t, responses[4])
 	if start.Update.SessionUpdate != "tool_call" ||
 		start.Update.Status != "in_progress" ||
 		start.Update.ToolCallID == "" {
 		t.Fatalf("tool start = %#v, want running command", start)
 	}
-	update := decodeAppUpdate(t, responses[4])
+	update := decodeAppUpdate(t, responses[5])
 	if update.Update.SessionUpdate != "agent_message_chunk" || decodeAppChunkText(t, update.Update.Content) != "claude answer" {
 		t.Fatalf("assistant update = %#v, want claude answer", update)
 	}
-	finish := decodeAppUpdate(t, responses[5])
+	finish := decodeAppUpdate(t, responses[6])
 	if finish.Update.SessionUpdate != "tool_call_update" ||
 		finish.Update.ToolCallID != start.Update.ToolCallID ||
 		finish.Update.Status != "completed" {
@@ -321,7 +325,7 @@ func TestCommandBridgeRunsClaudePrintWithConfigOptions(t *testing.T) {
 	var prompt struct {
 		StopReason string `json:"stopReason"`
 	}
-	decodeAppResult(t, responses[6], &prompt)
+	decodeAppResult(t, responses[7], &prompt)
 	if prompt.StopReason != "end_turn" {
 		t.Fatalf("stop reason = %q, want end_turn", prompt.StopReason)
 	}

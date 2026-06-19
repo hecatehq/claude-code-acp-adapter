@@ -38,7 +38,8 @@ Implemented:
 - protocol forwarding for session load, resume, fork, list, delete, and
   MCP-over-ACP message payloads
 - command-backed native Claude Code path using `claude --print`
-- ACP model and effort config options for the command-backed path
+- ACP model, effort, and permission-mode config options for the command-backed
+  path
 - in-memory command-backed session load/resume/fork plus bounded transcript
   replay for multi-turn continuity while the adapter process is alive
 - streamed command stdout chunks and generic command `tool_call` activity
@@ -98,7 +99,8 @@ secret values. Use `--binary` to point at a non-default Claude executable and
 
 By default, the root ACP server owns lightweight ACP sessions and runs each
 prompt through `claude --print` in the session workspace. The command-backed
-path exposes ACP config options for model and effort, passes only
+path exposes ACP config options for model, effort, and Claude Code permission
+mode, passes only
 provider-specific environment variables through the shared process runner, and
 converts command stdout into ACP assistant text while emitting a generic
 `tool_call` activity for the native Claude command execution. The session state

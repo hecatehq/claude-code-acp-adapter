@@ -97,6 +97,20 @@ func ConfigOptions() []commandbridge.SelectConfigOption {
 				{Value: "max", Name: "Max"},
 			},
 		},
+		{
+			ID:           "permission_mode",
+			Name:         "Permission mode",
+			Description:  "Claude Code permission mode. Default matches the adapter's non-interactive dontAsk boundary.",
+			Category:     "permission",
+			DefaultValue: "dontAsk",
+			Options: []commandbridge.SelectValue{
+				{Value: "dontAsk", Name: "Do not ask"},
+				{Value: "default", Name: "Default"},
+				{Value: "acceptEdits", Name: "Accept edits"},
+				{Value: "auto", Name: "Auto"},
+				{Value: "plan", Name: "Plan"},
+			},
+		},
 	}
 }
 
@@ -111,7 +125,7 @@ func PromptCommand(session commandbridge.Session, params runtimeacp.PromptParams
 	args := []string{
 		"--print",
 		"--output-format", "text",
-		"--permission-mode", "dontAsk",
+		"--permission-mode", selectedPermissionMode(session),
 	}
 	for _, dir := range session.AdditionalDirectories {
 		if dir != "" {
@@ -169,4 +183,11 @@ func selectedConfig(session commandbridge.Session, id string) string {
 		return ""
 	}
 	return value
+}
+
+func selectedPermissionMode(session commandbridge.Session) string {
+	if value := selectedConfig(session, "permission_mode"); value != "" {
+		return value
+	}
+	return "dontAsk"
 }

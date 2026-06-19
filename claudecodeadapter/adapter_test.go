@@ -53,7 +53,7 @@ func TestNewCLISpecExposesLibraryContract(t *testing.T) {
 	if spec.Info.Name != claudecodeadapter.Name || spec.Info.Version != "2.0.0" {
 		t.Fatalf("spec.Info = %#v", spec.Info)
 	}
-	if spec.Command == nil || spec.Command.BuildPrompt == nil || len(spec.Command.Options) != 2 || !spec.Command.IncludeTranscript {
+	if spec.Command == nil || spec.Command.BuildPrompt == nil || len(spec.Command.Options) != 3 || !spec.Command.IncludeTranscript {
 		t.Fatalf("command spec = %#v, want command-backed bridge with config options", spec.Command)
 	}
 	if spec.Doctor == nil || spec.Doctor.Binary != "claude" {
@@ -94,8 +94,9 @@ func TestPromptCommandBuildsClaudePrint(t *testing.T) {
 		CWD:                   "/work",
 		AdditionalDirectories: []string{"/extra", ""},
 		Config: map[string]string{
-			"model":  "sonnet",
-			"effort": "high",
+			"model":           "sonnet",
+			"effort":          "high",
+			"permission_mode": "plan",
 		},
 	}, runtimeacp.PromptParams{
 		Prompt: []runtimeacp.ContentBlock{{Type: "text", Text: "hello claude"}},
@@ -106,7 +107,7 @@ func TestPromptCommandBuildsClaudePrint(t *testing.T) {
 	wantArgs := []string{
 		"--print",
 		"--output-format", "text",
-		"--permission-mode", "dontAsk",
+		"--permission-mode", "plan",
 		"--add-dir", "/extra",
 		"--model", "sonnet",
 		"--effort", "high",
