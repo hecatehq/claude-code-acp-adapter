@@ -127,7 +127,8 @@ tool/permission/elicitation parity.
 - root ACP native command bridge: session creation with Claude model/effort
   config options, permission-mode config option, config updates,
   `claude --print --output-format stream-json` argv construction, additional
-  workspace directories, streamed JSONL parsing into ACP assistant text,
+  workspace directories, ACP stdio/HTTP MCP server config propagation into
+  Claude `--mcp-config`, streamed JSONL parsing into ACP assistant text,
   thinking, tool-call, and usage updates, generic command `tool_call` activity
   for the outer Claude process, in-memory load/resume/fork capability, bounded
   transcript replay for later command prompts, and prompt completion
@@ -157,13 +158,12 @@ adapter to this one:
 - provider-native permission request/event mapping beyond the selected Claude
   Code permission mode
 - AskUserQuestion and MCP elicitation forms
-- shell, file, edit, grep, glob, web, MCP, TODO, task, plan, memory, and
+- shell, file, edit, grep, glob, web, TODO, task, plan, memory, and
   terminal-output tool mappings
 - orphan result skipping after cancelled queued prompts
 - query-closed errors for prompts/cancels after stream termination
 - local slash-command metadata stripping
-- MCP server merging, vendor MCP connection lifecycle semantics, and MCP tool
-  approval elicitations
+- vendor MCP connection lifecycle semantics and MCP tool approval elicitations
 - production release signing/provenance
 
 ## Test Strategy

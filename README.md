@@ -45,6 +45,8 @@ Implemented:
 - command-backed `session/list` metadata, `config_option_update`
   notifications for config changes, and `session_info_update` notifications
   when transcript metadata changes
+- command-backed ACP stdio/HTTP MCP server config propagation into Claude
+  `--mcp-config` with `--strict-mcp-config`
 - Claude `--output-format stream-json` translation into ACP assistant text,
   thinking, tool-call, and usage updates, plus generic command `tool_call`
   activity for the native Claude process
@@ -55,7 +57,7 @@ Not implemented yet:
 - deeper Claude Code / Claude Agent SDK integration beyond `claude --print`
 - vendor-specific durable/native persistent session semantics across adapter
   process restarts
-- complete vendor-specific permission/MCP/auth/slash-command/elicitation mapping
+- complete vendor-specific permission/MCP lifecycle/auth/slash-command/elicitation mapping
 - runtime config/auth/model discovery and orphan-result handling
 - production signing/provenance for release artifacts
 

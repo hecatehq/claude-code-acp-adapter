@@ -120,6 +120,79 @@ func TestPromptCommandBuildsClaudePrint(t *testing.T) {
 	}
 }
 
+func TestPromptCommandBuildsClaudePrintWithMCPServers(t *testing.T) {
+	got, err := claudecodeadapter.PromptCommand(commandbridge.Session{
+		CWD: "/work",
+		MCPServers: []runtimeacp.MCPServer{
+			{
+				Name:    "filesystem",
+				Command: "uvx",
+				Args:    []string{"mcp-server-filesystem", "/work"},
+				Env: []runtimeacp.EnvVariable{{
+					Name:  "MCP_TOKEN",
+					Value: "secret",
+				}},
+			},
+			{
+				Type: "http",
+				Name: "docs",
+				URL:  "https://docs.example/mcp",
+				Headers: []runtimeacp.HTTPHeader{{
+					Name:  "Authorization",
+					Value: "Bearer token",
+				}},
+			},
+		},
+	}, runtimeacp.PromptParams{
+		Prompt: []runtimeacp.ContentBlock{{Type: "text", Text: "hello claude"}},
+	})
+	if err != nil {
+		t.Fatalf("PromptCommand: %v", err)
+	}
+	idx := indexOfArg(got.Args, "--mcp-config")
+	if idx < 1 || got.Args[idx-1] != "--strict-mcp-config" {
+		t.Fatalf("args = %#v, want strict mcp config before --mcp-config", got.Args)
+	}
+	if got.Args[len(got.Args)-1] != "hello claude" {
+		t.Fatalf("last arg = %q, want prompt", got.Args[len(got.Args)-1])
+	}
+	var config struct {
+		MCPServers map[string]struct {
+			Type    string            `json:"type"`
+			Command string            `json:"command"`
+			Args    []string          `json:"args"`
+			Env     map[string]string `json:"env"`
+			URL     string            `json:"url"`
+			Headers map[string]string `json:"headers"`
+		} `json:"mcpServers"`
+	}
+	if err := json.Unmarshal([]byte(got.Args[idx+1]), &config); err != nil {
+		t.Fatalf("decode mcp config %q: %v", got.Args[idx+1], err)
+	}
+	if fs := config.MCPServers["filesystem"]; fs.Command != "uvx" || len(fs.Args) != 2 || fs.Args[0] != "mcp-server-filesystem" || fs.Env["MCP_TOKEN"] != "secret" {
+		t.Fatalf("filesystem MCP config = %#v, want stdio server", fs)
+	}
+	if docs := config.MCPServers["docs"]; docs.Type != "http" || docs.URL != "https://docs.example/mcp" || docs.Headers["Authorization"] != "Bearer token" {
+		t.Fatalf("docs MCP config = %#v, want HTTP server", docs)
+	}
+}
+
+func TestPromptCommandRejectsUnsupportedMCPServer(t *testing.T) {
+	_, err := claudecodeadapter.PromptCommand(commandbridge.Session{
+		CWD: "/work",
+		MCPServers: []runtimeacp.MCPServer{{
+			Type: "acp",
+			ID:   "hosted",
+			Name: "Hosted",
+		}},
+	}, runtimeacp.PromptParams{
+		Prompt: []runtimeacp.ContentBlock{{Type: "text", Text: "hello claude"}},
+	})
+	if err == nil || !strings.Contains(err.Error(), `mcp server "Hosted": command or url is required`) {
+		t.Fatalf("PromptCommand error = %v, want unsupported MCP server", err)
+	}
+}
+
 func TestNewServerStreamsNativeClaudeOutput(t *testing.T) {
 	installFakeCommand(t, "claude", `
 if [ "$1" != "--print" ]; then
@@ -322,4 +395,13 @@ func assertNoPackageRunnerCommand(t testing.TB, command string) {
 	case "npx", "npm", "node", "bun", "sh", "bash", "zsh", "cmd", "powershell", "pwsh":
 		t.Fatalf("command = %q, want fixed native CLI without package runner or shell", command)
 	}
+}
+
+func indexOfArg(args []string, want string) int {
+	for i, arg := range args {
+		if arg == want {
+			return i
+		}
+	}
+	return -1
 }

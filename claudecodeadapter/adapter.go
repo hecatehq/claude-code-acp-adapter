@@ -4,8 +4,10 @@
 package claudecodeadapter
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/hecatehq/acp-adapter-kit/acp"
 	"github.com/hecatehq/acp-adapter-kit/adaptercli"
@@ -141,12 +143,93 @@ func PromptCommand(session commandbridge.Session, params runtimeacp.PromptParams
 	if effort := selectedConfig(session, "effort"); effort != "" {
 		args = append(args, "--effort", effort)
 	}
+	if mcpConfig, ok, err := claudeMCPConfigArg(session.MCPServers); err != nil {
+		return adapterprocess.Spec{}, err
+	} else if ok {
+		args = append(args, "--strict-mcp-config", "--mcp-config", mcpConfig)
+	}
 	args = append(args, text)
 	return adapterprocess.Spec{
 		Command: "claude",
 		Args:    args,
 		Dir:     session.CWD,
 	}, nil
+}
+
+func claudeMCPConfigArg(servers []runtimeacp.MCPServer) (string, bool, error) {
+	if len(servers) == 0 {
+		return "", false, nil
+	}
+	configs := map[string]map[string]any{}
+	for _, server := range servers {
+		name := strings.TrimSpace(server.Name)
+		if name == "" {
+			return "", false, fmt.Errorf("mcp server name is required")
+		}
+		entry, err := claudeMCPServerConfig(server)
+		if err != nil {
+			return "", false, fmt.Errorf("mcp server %q: %w", name, err)
+		}
+		configs[name] = entry
+	}
+	if len(configs) == 0 {
+		return "", false, nil
+	}
+	raw, err := json.Marshal(map[string]any{"mcpServers": configs})
+	if err != nil {
+		return "", false, err
+	}
+	return string(raw), true, nil
+}
+
+func claudeMCPServerConfig(server runtimeacp.MCPServer) (map[string]any, error) {
+	if command := strings.TrimSpace(server.Command); command != "" {
+		entry := map[string]any{"command": command}
+		if len(server.Args) != 0 {
+			entry["args"] = append([]string(nil), server.Args...)
+		}
+		if env := claudeMCPEnv(server.Env); len(env) != 0 {
+			entry["env"] = env
+		}
+		return entry, nil
+	}
+	if url := strings.TrimSpace(server.URL); url != "" {
+		transport := strings.TrimSpace(server.Type)
+		if transport == "" {
+			transport = "http"
+		}
+		entry := map[string]any{
+			"type": transport,
+			"url":  url,
+		}
+		if headers := claudeMCPHeaders(server.Headers); len(headers) != 0 {
+			entry["headers"] = headers
+		}
+		return entry, nil
+	}
+	return nil, fmt.Errorf("command or url is required")
+}
+
+func claudeMCPEnv(values []runtimeacp.EnvVariable) map[string]string {
+	out := map[string]string{}
+	for _, item := range values {
+		name := strings.TrimSpace(item.Name)
+		if name != "" {
+			out[name] = item.Value
+		}
+	}
+	return out
+}
+
+func claudeMCPHeaders(values []runtimeacp.HTTPHeader) map[string]string {
+	out := map[string]string{}
+	for _, item := range values {
+		name := strings.TrimSpace(item.Name)
+		if name != "" {
+			out[name] = item.Value
+		}
+	}
+	return out
 }
 
 func RuntimeEnv() []string {
