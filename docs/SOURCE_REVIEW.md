@@ -1,19 +1,20 @@
 # Source Review
 
-This scaffold was created after inspecting the current npm package and upstream
-adapter source. The goal is to replace npm-managed runtime launchers without
-losing important protocol behavior.
+This scaffold was created after inspecting the published adapter artifact and
+upstream adapter source. The goal is to remove package-manager runtime launchers
+without losing important protocol behavior.
 
 ## Sources Inspected
 
-- `@agentclientprotocol/claude-agent-acp@0.47.0` npm tarball
+- published `agentclientprotocol/claude-agent-acp` package artifact, version
+  0.47.0
 - `agentclientprotocol/claude-agent-acp` source repository, shallow clone
 
-## What the npm Package Does
+## What the Published Package Does
 
 The published package is a TypeScript/Node ACP adapter around the official
-Claude Agent SDK. Unlike the Codex npm package, this package owns substantial
-runtime behavior, not just platform dispatch.
+Claude Agent SDK. Unlike the Codex platform launcher, this package owns
+substantial runtime behavior, not just platform dispatch.
 
 ## Behavior the Adapter Handles
 
@@ -50,12 +51,12 @@ The upstream adapter currently handles:
 ## Go Adapter Requirements
 
 The Go replacement must preserve these semantics deliberately. A thin `claude`
-process wrapper would be simpler, but it would not replace what the npm adapter
-currently does.
+process wrapper would be simpler, but it would not replace what the upstream
+adapter currently does.
 
 Minimum safety requirements:
 
-- no runtime `npx`
+- no runtime package-manager launchers
 - no shell command construction
 - fixed argv arrays
 - explicit environment allowlist
