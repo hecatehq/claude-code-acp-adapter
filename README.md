@@ -54,8 +54,8 @@ Implemented:
 - command-backed ACP stdio/HTTP MCP server config propagation into Claude
   `--mcp-config` with `--strict-mcp-config`
 - Claude `--output-format stream-json` translation into ACP assistant text,
-  thinking, tool-call, and usage updates, plus generic command `tool_call`
-  activity for the native Claude process
+  thinking, tool-call, usage, and terminal stop-reason updates, plus generic
+  command `tool_call` activity for the native Claude process
 - ACP `authenticate` mapped to the native `claude /login` command
 - ACP `logout` mapped to the native `claude auth logout` command
 - CI and tag-driven release packaging for unsigned alpha binaries

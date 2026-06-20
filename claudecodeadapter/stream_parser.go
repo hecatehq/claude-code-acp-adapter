@@ -84,12 +84,11 @@ func mapClaudeUserMessage(message map[string]any) commandbridge.JSONLMapping {
 }
 
 func mapClaudeResult(event map[string]any, seenAssistantText bool) commandbridge.JSONLMapping {
+	mapping := commandbridge.JSONLMapping{StopReason: claudeStopReason(event)}
 	if !seenAssistantText {
 		if text := firstText(event, "result", "message", "text"); text != "" {
-			return commandbridge.JSONLMapping{
-				Events:         []commandbridge.StreamEvent{commandbridge.AgentMessageChunk(text)},
-				TranscriptText: text,
-			}
+			mapping.Events = append(mapping.Events, commandbridge.AgentMessageChunk(text))
+			mapping.TranscriptText = text
 		}
 	}
 	usage := mapValue(event["usage"])
@@ -99,9 +98,9 @@ func mapClaudeResult(event map[string]any, seenAssistantText bool) commandbridge
 	used := sumInts(usage, "input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens", "output_tokens", "thinking_tokens", "total_tokens")
 	size := firstInt(usage, "context_window", "context_window_tokens", "size")
 	if used > 0 && size > 0 {
-		return commandbridge.JSONLMapping{Events: []commandbridge.StreamEvent{commandbridge.UsageUpdate(used, size)}}
+		mapping.Events = append(mapping.Events, commandbridge.UsageUpdate(used, size))
 	}
-	return commandbridge.JSONLMapping{}
+	return mapping
 }
 
 func claudeToolKind(name string) string {
@@ -125,6 +124,26 @@ func claudeToolKind(name string) string {
 		return "think"
 	default:
 		return "other"
+	}
+}
+
+func claudeStopReason(values map[string]any) runtimeacp.StopReason {
+	reason := strings.ToLower(firstString(values, "stop_reason", "stopReason", "finish_reason", "finishReason", "reason", "subtype", "status"))
+	switch {
+	case reason == "":
+		return ""
+	case strings.Contains(reason, "max_turn"):
+		return runtimeacp.StopReasonMaxTurnRequests
+	case strings.Contains(reason, "max_token"), strings.Contains(reason, "token_limit"), strings.Contains(reason, "length"):
+		return runtimeacp.StopReasonMaxTokens
+	case strings.Contains(reason, "refusal"), strings.Contains(reason, "refused"), strings.Contains(reason, "safety"):
+		return runtimeacp.StopReasonRefusal
+	case strings.Contains(reason, "cancel"):
+		return runtimeacp.StopReasonCancelled
+	case strings.Contains(reason, "success"), strings.Contains(reason, "end"), strings.Contains(reason, "complete"), strings.Contains(reason, "done"):
+		return runtimeacp.StopReasonEndTurn
+	default:
+		return ""
 	}
 }
 

@@ -731,6 +731,29 @@ func TestClaudeStreamParserMapsJSONL(t *testing.T) {
 	}
 }
 
+func TestClaudeStreamParserMapsTerminalStopReason(t *testing.T) {
+	parser := claudecodeadapter.NewStreamParser(commandbridge.Session{}, runtimeacp.PromptParams{})
+
+	events, err := parser.Parse([]byte(`{"type":"result","subtype":"error_max_turns","result":"partial answer","usage":{"input_tokens":4,"output_tokens":6,"context_window":128}}` + "\n"))
+	if err != nil {
+		t.Fatalf("Parse returned error: %v", err)
+	}
+	if len(events) != 2 {
+		t.Fatalf("events len = %d, want message + usage: %#v", len(events), events)
+	}
+	if events[0].Update["sessionUpdate"] != "agent_message_chunk" || parser.Transcript() != "partial answer" {
+		t.Fatalf("message = %#v transcript=%q, want result text", events[0].Update, parser.Transcript())
+	}
+	if events[1].Update["sessionUpdate"] != "usage_update" ||
+		events[1].Update["used"] != 10 ||
+		events[1].Update["size"] != 128 {
+		t.Fatalf("usage = %#v, want terminal usage", events[1].Update)
+	}
+	if got := parser.StopReason(); got != runtimeacp.StopReasonMaxTurnRequests {
+		t.Fatalf("StopReason() = %q, want max_turn_requests", got)
+	}
+}
+
 func TestClaudeStreamParserClassifiesProviderTools(t *testing.T) {
 	parser := claudecodeadapter.NewStreamParser(commandbridge.Session{}, runtimeacp.PromptParams{})
 	events, err := parser.Parse([]byte(`{"type":"assistant","message":{"content":[{"type":"tool_use","id":"web-1","name":"WebSearch","input":{"query":"acp"}},{"type":"tool_use","id":"task-1","name":"TaskCreate","input":{"description":"review"}},{"type":"tool_use","id":"memory-1","name":"MemoryRecall","input":{"query":"project"}}]}}` + "\n"))

@@ -133,9 +133,10 @@ tool/permission/elicitation parity.
   `/compact`/`/debug`/`/run`/`/verify` advertisement through the normal
   `claude --print` prompt path, additional workspace directories, ACP stdio/HTTP
   MCP server config propagation into Claude `--mcp-config`, streamed JSONL
-  parsing into ACP assistant text, thinking, tool-call, and usage updates,
-  Claude tool kind classification for shell/file/web/task/memory/todo/plan
-  tools, generic command `tool_call` activity for the outer Claude process,
+  parsing into ACP assistant text, thinking, tool-call, usage, and terminal
+  stop-reason updates, Claude tool kind classification for
+  shell/file/web/task/memory/todo/plan tools, generic command `tool_call`
+  activity for the outer Claude process,
   in-memory fork capability, bounded transcript replay for later command
   prompts, and prompt completion
 - shared adapter conformance checks for the Hecate-facing ACP initialize
@@ -162,7 +163,6 @@ adapter to this one:
   semantics beyond Claude `--session-id`
 - Claude-specific session fork persistence/history semantics beyond in-memory
   command-backed state
-- terminal prompt results beyond parsed command stream updates
 - real vendor-runtime normal cancellation, wedged-runtime forced cancellation, and no
   double-settle behavior
 - terminal auth behavior in local/remote environments
