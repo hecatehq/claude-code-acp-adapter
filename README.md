@@ -119,12 +119,13 @@ mode, including Claude Code's `bypassPermissions` full-access mode, passes only
 provider-specific environment variables through the shared process runner, and
 runs Claude with `--output-format stream-json`. Known
 Claude JSONL events are translated into ACP assistant text, thinking,
-tool-call, and usage updates. Tool updates preserve Claude Code categories such
-as shell execution, file reads/edits, web fetch/search, task tools, memory
-recall, todos, and plan/thinking tools; unknown JSONL events are ignored rather
-than shown as raw chat text. A generic `tool_call` still wraps the native
-Claude process execution so hosts can show the outer command boundary. The session
-state is lightweight in the adapter, but session ids are Claude-native UUIDs
+tool-call, permission-request, and usage updates. Tool updates preserve Claude
+Code categories such as shell execution, file reads/edits, web fetch/search,
+task tools, memory recall, todos, and plan/thinking tools; unknown JSONL events
+are ignored rather than shown as raw chat text. A generic `tool_call` still
+wraps the native Claude process execution so hosts can show the outer command
+boundary. The session state is lightweight in the adapter, but session ids are
+Claude-native UUIDs
 passed to `claude --session-id`. `session/load` and `session/resume` can adopt a
 host-known Claude session id after an adapter process restart; `session/fork`
 and transcript replay remain in-memory conveniences while the adapter process

@@ -170,8 +170,8 @@ adapter to this one:
 - settings resolution, settings trust filtering, and settings reloads
 - model allowlists, model alias discovery, and permission-mode availability by
   model beyond the initial static command-backed selectors
-- provider-native permission request/event mapping beyond the selected Claude
-  Code permission mode
+- provider-native permission response edge cases beyond parsed request mapping
+  and the selected Claude Code permission mode
 - AskUserQuestion and MCP elicitation forms
 - deeper shell, file, edit, grep, glob, web, TODO, task, plan, memory, and
   terminal-output tool mappings beyond kind classification
