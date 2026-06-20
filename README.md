@@ -56,6 +56,7 @@ Implemented:
 - Claude `--output-format stream-json` translation into ACP assistant text,
   thinking, tool-call, and usage updates, plus generic command `tool_call`
   activity for the native Claude process
+- ACP `logout` mapped to the native `claude auth logout` command
 - CI and tag-driven release packaging for unsigned alpha binaries
 
 Not implemented yet:
@@ -63,7 +64,7 @@ Not implemented yet:
 - deeper Claude Code / Claude Agent SDK integration beyond `claude --print`
 - deeper vendor-specific durable/native persistent session semantics beyond
   Claude `--session-id`
-- complete vendor-specific permission/MCP lifecycle/auth/slash-command/elicitation mapping beyond the adapter-owned command set
+- complete vendor-specific permission/MCP lifecycle/auth/slash-command/elicitation mapping beyond ACP `logout` and the adapter-owned command set
 - runtime config/auth/model discovery and orphan-result handling
 - production signing/provenance for release artifacts
 
@@ -137,6 +138,7 @@ The adapter advertises `/init`, `/review`, `/code-review`, `/security-review`,
 `/compact`, `/debug`, `/run`, and `/verify` as ACP available commands and passes
 them through the normal `claude --print` prompt path. Other Claude Code commands
 remain unadvertised until their non-interactive behavior is explicitly tested.
+The ACP `logout` method maps to `claude auth logout`.
 
 The root ACP server can also launch an explicit subprocess-backed ACP runtime
 with `--runtime-binary`, `--runtime-workdir`, and repeated `--runtime-arg`

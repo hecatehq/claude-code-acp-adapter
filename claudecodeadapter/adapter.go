@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"regexp"
 	"strings"
 	"sync/atomic"
@@ -78,6 +79,7 @@ func CommandSpec() *commandbridge.Spec {
 		Commands:            AvailableCommands(),
 		IncludeTranscript:   true,
 		BuildPrompt:         PromptCommand,
+		BuildLogout:         LogoutCommand,
 		NewStreamParser:     NewStreamParser,
 	}
 }
@@ -214,6 +216,18 @@ func PromptCommand(session commandbridge.Session, params runtimeacp.PromptParams
 		Command: "claude",
 		Args:    args,
 		Dir:     session.CWD,
+	}, nil
+}
+
+func LogoutCommand() (adapterprocess.Spec, error) {
+	dir, err := os.Getwd()
+	if err != nil {
+		return adapterprocess.Spec{}, err
+	}
+	return adapterprocess.Spec{
+		Command: "claude",
+		Args:    []string{"auth", "logout"},
+		Dir:     dir,
 	}, nil
 }
 

@@ -149,6 +149,7 @@ func TestNewCLISpecExposesLibraryContract(t *testing.T) {
 	}
 	if spec.Command == nil ||
 		spec.Command.BuildPrompt == nil ||
+		spec.Command.BuildLogout == nil ||
 		spec.Command.NewStreamParser == nil ||
 		spec.Command.NewID == nil ||
 		!spec.Command.LoadUnknownSessions ||
@@ -201,6 +202,21 @@ func TestPromptCommandUsesNativeClaudeCLIOnly(t *testing.T) {
 	assertNoPackageRunnerCommand(t, spec.Doctor.Binary)
 	if spec.Doctor.Binary != "claude" {
 		t.Fatalf("doctor binary = %q, want native claude CLI", spec.Doctor.Binary)
+	}
+}
+
+func TestLogoutCommandUsesNativeClaudeCLIOnly(t *testing.T) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd: %v", err)
+	}
+	got, err := claudecodeadapter.LogoutCommand()
+	if err != nil {
+		t.Fatalf("LogoutCommand: %v", err)
+	}
+	assertNoPackageRunnerCommand(t, got.Command)
+	if got.Command != "claude" || got.Dir != cwd || !reflect.DeepEqual(got.Args, []string{"auth", "logout"}) {
+		t.Fatalf("process spec = %#v, want claude auth logout", got)
 	}
 }
 
@@ -422,6 +438,24 @@ func TestPromptCommandRejectsUnsupportedMCPServer(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), `mcp server "Hosted": command or url is required`) {
 		t.Fatalf("PromptCommand error = %v, want unsupported MCP server", err)
+	}
+}
+
+func TestNewServerRunsLogoutCommand(t *testing.T) {
+	installFakeCommand(t, "claude", `
+if [ "$1" != "auth" ] || [ "$2" != "logout" ]; then
+  echo "unexpected command: $*" >&2
+  exit 64
+fi
+printf 'logged out\n'
+`)
+	client := acptest.NewClient(t, claudecodeadapter.NewServer("test"))
+
+	resp := client.Request("logout", map[string]any{})
+	var result map[string]any
+	resp.ResultInto(t, &result)
+	if len(result) != 0 {
+		t.Fatalf("logout result = %#v, want empty object", result)
 	}
 }
 

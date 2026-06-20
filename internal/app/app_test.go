@@ -369,6 +369,35 @@ func TestCommandBridgeRunsClaudePrintWithConfigOptions(t *testing.T) {
 	}
 }
 
+func TestCommandBridgeRunsClaudeLogout(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	input := strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"logout","params":{}}` + "\n")
+	spec := adapterSpec(input, &stdout, &stderr)
+	var saw adapterprocess.Spec
+	spec.Command.Runner = commandbridge.RunnerFunc(func(_ context.Context, got adapterprocess.Spec) (adapterprocess.Result, error) {
+		saw = got
+		return adapterprocess.Result{Stdout: []byte("logged out\n")}, nil
+	})
+
+	code := adaptercli.Run(nil, spec)
+	if code != 0 {
+		t.Fatalf("Run returned %d, want 0; stderr=%q stdout=%q", code, stderr.String(), stdout.String())
+	}
+	responses := decodeAppResponses(t, stdout.Bytes())
+	if len(responses) != 1 {
+		t.Fatalf("got %d envelopes, want logout result\n%s", len(responses), stdout.String())
+	}
+	var result map[string]any
+	decodeAppResult(t, responses[0], &result)
+	if len(result) != 0 {
+		t.Fatalf("logout result = %#v, want empty object", result)
+	}
+	if saw.Command != "claude" || !reflect.DeepEqual(saw.Args, []string{"auth", "logout"}) || saw.Dir == "" {
+		t.Fatalf("logout process spec = %#v, want claude auth logout", saw)
+	}
+}
+
 func TestRuntimeBinaryRequiresRuntimeWorkdir(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
