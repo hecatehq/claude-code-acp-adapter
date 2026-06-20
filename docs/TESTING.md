@@ -125,7 +125,8 @@ tool/permission/elicitation parity.
   allowlist inheritance, and runtime-flag precedence over the native command
   bridge
 - root ACP native command bridge: session creation with Claude model/effort
-  config options, permission-mode config option, config updates,
+  config options, permission-mode config option including `bypassPermissions`,
+  config updates,
   `claude --print --output-format stream-json --session-id` argv construction,
   Claude UUID session creation, host-known session id adoption on
   `session/load`, `/init`/`/review`/`/code-review`/`/security-review`

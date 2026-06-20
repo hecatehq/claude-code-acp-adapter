@@ -229,6 +229,22 @@ func TestPromptCommandBuildsClaudePrint(t *testing.T) {
 	}
 }
 
+func TestConfigOptionsExposeClaudeBypassPermissionsMode(t *testing.T) {
+	options := claudecodeadapter.ConfigOptions()
+	for _, option := range options {
+		if option.ID != "permission_mode" {
+			continue
+		}
+		for _, value := range option.Options {
+			if value.Value == "bypassPermissions" {
+				return
+			}
+		}
+		t.Fatalf("permission_mode values = %#v, want bypassPermissions", option.Options)
+	}
+	t.Fatal("permission_mode config option not found")
+}
+
 func TestPromptCommandBuildsClaudeInitAsPrint(t *testing.T) {
 	got, err := claudecodeadapter.PromptCommand(commandbridge.Session{
 		ID:  testClaudeSessionID,
@@ -281,6 +297,33 @@ func TestPromptCommandBuildsClaudeReviewCommandAsPrint(t *testing.T) {
 		"--session-id", testClaudeSessionID,
 		"--permission-mode", "dontAsk",
 		"/security-review focus on auth changes",
+	}
+	if got.Command != "claude" || got.Dir != "/work" || !reflect.DeepEqual(got.Args, wantArgs) {
+		t.Fatalf("process spec = %#v, want claude args %#v", got, wantArgs)
+	}
+}
+
+func TestPromptCommandBuildsClaudeBypassPermissionsMode(t *testing.T) {
+	got, err := claudecodeadapter.PromptCommand(commandbridge.Session{
+		ID:  testClaudeSessionID,
+		CWD: "/work",
+		Config: map[string]string{
+			"permission_mode": "bypassPermissions",
+		},
+	}, runtimeacp.PromptParams{
+		Prompt: []runtimeacp.ContentBlock{{Type: "text", Text: "use full access"}},
+	})
+	if err != nil {
+		t.Fatalf("PromptCommand: %v", err)
+	}
+	wantArgs := []string{
+		"--print",
+		"--output-format", "stream-json",
+		"--include-partial-messages",
+		"--verbose",
+		"--session-id", testClaudeSessionID,
+		"--permission-mode", "bypassPermissions",
+		"use full access",
 	}
 	if got.Command != "claude" || got.Dir != "/work" || !reflect.DeepEqual(got.Args, wantArgs) {
 		t.Fatalf("process spec = %#v, want claude args %#v", got, wantArgs)

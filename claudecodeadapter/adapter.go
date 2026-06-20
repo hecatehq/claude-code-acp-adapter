@@ -148,6 +148,7 @@ func ConfigOptions() []commandbridge.SelectConfigOption {
 				{Value: "acceptEdits", Name: "Accept edits"},
 				{Value: "auto", Name: "Auto"},
 				{Value: "plan", Name: "Plan"},
+				{Value: "bypassPermissions", Name: "Bypass permissions", Description: "Run with Claude Code's full permission bypass mode."},
 			},
 		},
 	}

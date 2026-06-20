@@ -112,8 +112,9 @@ secret values. Use `--binary` to point at a non-default Claude executable and
 By default, the root ACP server owns lightweight ACP sessions and runs each
 prompt through `claude --print` in the session workspace. The command-backed
 path exposes ACP config options for model, effort, and Claude Code permission
-mode, passes only provider-specific environment variables through the shared
-process runner, and runs Claude with `--output-format stream-json`. Known
+mode, including Claude Code's `bypassPermissions` full-access mode, passes only
+provider-specific environment variables through the shared process runner, and
+runs Claude with `--output-format stream-json`. Known
 Claude JSONL events are translated into ACP assistant text, thinking,
 tool-call, and usage updates; unknown JSONL events are ignored rather than
 shown as raw chat text. A generic `tool_call` still wraps the native Claude
