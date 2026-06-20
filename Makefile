@@ -6,13 +6,16 @@ CMD := ./cmd/$(BINARY)
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo 0.0.0-dev)
 LDFLAGS := -s -w -X github.com/hecatehq/claude-code-acp-adapter/internal/app.Version=$(VERSION)
 
-.PHONY: test test-race vet build version-smoke release-check snapshot clean
+.PHONY: test test-race real-cli-smoke vet build version-smoke release-check snapshot clean
 
 test:
 	$(GO) test ./...
 
 test-race:
 	$(GO) test -race ./...
+
+real-cli-smoke:
+	ACP_ADAPTER_REAL_CLI_SMOKE=1 $(GO) test -tags real_cli -run TestRealClaudeCodeCLISmoke -count=1 -timeout 5m ./claudecodeadapter
 
 vet:
 	$(GO) vet ./...
