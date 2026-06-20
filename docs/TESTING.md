@@ -127,7 +127,7 @@ production-grade.
   bridge
 - root ACP native command bridge: session creation with Claude model/effort
   config options, permission-mode config option including `bypassPermissions`,
-  config updates,
+  config updates, explicit native command environment allowlists,
   `claude --print --output-format stream-json --session-id` argv construction,
   Claude UUID session creation, host-known session id adoption on
   `session/load`, `/init`/`/review`/`/code-review`/`/security-review`
@@ -142,6 +142,9 @@ production-grade.
   prompts, and prompt completion
 - source-shaped Claude stream fixtures for permission requests, thinking/text
   content, tool lifecycle updates, usage, and terminal stop reasons
+- opt-in real Claude Code CLI smoke coverage that requires an authenticated
+  local `claude` binary and proves a real prompt completes through the ACP
+  command bridge
 - shared adapter conformance checks for the Hecate-facing ACP initialize
   contract, advertised auth/logout capabilities, session config selectors, and
   available slash-command names
@@ -211,3 +214,18 @@ Keep this repository's tests focused on Claude Code-specific adapter behavior:
 Do not recreate kit packages under `internal/`. Add reusable protocol/runtime
 coverage to `acp-adapter-kit`, then update this adapter to the new kit version
 and add only Claude-specific integration assertions here.
+
+## Real CLI Smoke
+
+The real Claude Code CLI smoke is intentionally excluded from the default test
+suite because it requires local authentication, network access, and may use
+provider quota. Run it only on a prepared developer machine:
+
+```sh
+make real-cli-smoke
+```
+
+The target sets `ACP_ADAPTER_REAL_CLI_SMOKE=1` and runs the `real_cli`
+build-tag test. It creates a temporary workspace, opens an ACP session, sends
+one minimal prompt through the native `claude` command bridge, and asserts that
+the prompt finishes with parsed assistant output.

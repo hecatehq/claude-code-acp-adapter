@@ -228,6 +228,7 @@ func PromptCommand(session commandbridge.Session, params runtimeacp.PromptParams
 		Command: "claude",
 		Args:    args,
 		Dir:     session.CWD,
+		Env:     claudeProcessEnv(),
 	}, nil
 }
 
@@ -240,6 +241,7 @@ func LogoutCommand() (adapterprocess.Spec, error) {
 		Command: "claude",
 		Args:    []string{"auth", "logout"},
 		Dir:     dir,
+		Env:     claudeProcessEnv(),
 	}, nil
 }
 
@@ -255,6 +257,7 @@ func AuthenticateCommand(methodID string) (adapterprocess.Spec, error) {
 		Command: "claude",
 		Args:    []string{"/login"},
 		Dir:     dir,
+		Env:     claudeProcessEnv(),
 	}, nil
 }
 
@@ -386,12 +389,18 @@ func RuntimeEnv() []string {
 	return []string{
 		"PATH",
 		"HOME",
+		"USER",
+		"LOGNAME",
 		"XDG_CONFIG_HOME",
 		"TMPDIR",
 		"ANTHROPIC_API_KEY",
 		"ANTHROPIC_BASE_URL",
 		"CLAUDE_CONFIG_DIR",
 	}
+}
+
+func claudeProcessEnv() adapterprocess.EnvPolicy {
+	return adapterprocess.EnvPolicy{Inherit: RuntimeEnv()}
 }
 
 func DoctorSpec() *adaptercli.DoctorSpec {

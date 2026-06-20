@@ -208,7 +208,7 @@ func TestNewCLISpecExposesLibraryContract(t *testing.T) {
 	if spec.Doctor == nil || spec.Doctor.Binary != "claude" {
 		t.Fatalf("doctor spec = %#v, want claude doctor", spec.Doctor)
 	}
-	wantEnv := []string{"PATH", "HOME", "XDG_CONFIG_HOME", "TMPDIR", "ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "CLAUDE_CONFIG_DIR"}
+	wantEnv := []string{"PATH", "HOME", "USER", "LOGNAME", "XDG_CONFIG_HOME", "TMPDIR", "ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "CLAUDE_CONFIG_DIR"}
 	if !reflect.DeepEqual(spec.Runtime.InheritEnv, wantEnv) || !reflect.DeepEqual(claudecodeadapter.RuntimeEnv(), wantEnv) {
 		t.Fatalf("runtime env = %#v / %#v, want %#v", spec.Runtime.InheritEnv, claudecodeadapter.RuntimeEnv(), wantEnv)
 	}
@@ -227,6 +227,9 @@ func TestPromptCommandUsesNativeClaudeCLIOnly(t *testing.T) {
 	assertNoPackageRunnerCommand(t, got.Command)
 	if got.Command != "claude" {
 		t.Fatalf("process command = %q, want native claude CLI", got.Command)
+	}
+	if !reflect.DeepEqual(got.Env.Inherit, claudecodeadapter.RuntimeEnv()) {
+		t.Fatalf("process env = %#v, want runtime env allowlist", got.Env)
 	}
 
 	spec := claudecodeadapter.NewCLISpec("2.0.0", nil, nil, nil)
@@ -252,6 +255,9 @@ func TestLogoutCommandUsesNativeClaudeCLIOnly(t *testing.T) {
 	if got.Command != "claude" || got.Dir != cwd || !reflect.DeepEqual(got.Args, []string{"auth", "logout"}) {
 		t.Fatalf("process spec = %#v, want claude auth logout", got)
 	}
+	if !reflect.DeepEqual(got.Env.Inherit, claudecodeadapter.RuntimeEnv()) {
+		t.Fatalf("process env = %#v, want runtime env allowlist", got.Env)
+	}
 }
 
 func TestAuthenticateCommandUsesNativeClaudeCLIOnly(t *testing.T) {
@@ -266,6 +272,9 @@ func TestAuthenticateCommandUsesNativeClaudeCLIOnly(t *testing.T) {
 	assertNoPackageRunnerCommand(t, got.Command)
 	if got.Command != "claude" || got.Dir != cwd || !reflect.DeepEqual(got.Args, []string{"/login"}) {
 		t.Fatalf("process spec = %#v, want claude /login", got)
+	}
+	if !reflect.DeepEqual(got.Env.Inherit, claudecodeadapter.RuntimeEnv()) {
+		t.Fatalf("process env = %#v, want runtime env allowlist", got.Env)
 	}
 	if _, err := claudecodeadapter.AuthenticateCommand("browser-login"); err == nil || !strings.Contains(err.Error(), "unsupported auth method") {
 		t.Fatalf("AuthenticateCommand unsupported error = %v, want unsupported auth method", err)
