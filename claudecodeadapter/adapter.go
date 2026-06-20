@@ -89,6 +89,21 @@ func AvailableCommands() []commandbridge.AvailableCommand {
 			Description: "Ask Claude Code to inspect the workspace and create or update CLAUDE.md.",
 			InputHint:   "optional instruction focus",
 		},
+		{
+			Name:        "review",
+			Description: "Ask Claude Code to review a pull request locally in this session.",
+			InputHint:   "optional PR or review focus",
+		},
+		{
+			Name:        "code-review",
+			Description: "Ask Claude Code to review the current diff for correctness bugs and cleanups.",
+			InputHint:   "[effort] [--fix] [target]",
+		},
+		{
+			Name:        "security-review",
+			Description: "Ask Claude Code to analyze pending changes for security vulnerabilities.",
+			InputHint:   "optional target or focus",
+		},
 	}
 }
 

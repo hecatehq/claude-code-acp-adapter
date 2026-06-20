@@ -127,10 +127,13 @@ func TestNewServerPublishesAvailableCommands(t *testing.T) {
 	}
 	update := decodeSessionUpdate(t, responses[0])
 	if update.Update.SessionUpdate != "available_commands_update" ||
-		len(update.Update.AvailableCommands) != 1 ||
+		len(update.Update.AvailableCommands) != 4 ||
 		update.Update.AvailableCommands[0].Name != "init" ||
-		update.Update.AvailableCommands[0].Input.Unstructured.Hint != "optional instruction focus" {
-		t.Fatalf("available commands = %#v, want init command", update)
+		update.Update.AvailableCommands[0].Input.Unstructured.Hint != "optional instruction focus" ||
+		update.Update.AvailableCommands[1].Name != "review" ||
+		update.Update.AvailableCommands[2].Name != "code-review" ||
+		update.Update.AvailableCommands[3].Name != "security-review" {
+		t.Fatalf("available commands = %#v, want Claude command set", update)
 	}
 }
 
@@ -146,12 +149,15 @@ func TestNewCLISpecExposesLibraryContract(t *testing.T) {
 		spec.Command.NewID == nil ||
 		!spec.Command.LoadUnknownSessions ||
 		len(spec.Command.Options) != 3 ||
-		len(spec.Command.Commands) != 1 ||
+		len(spec.Command.Commands) != 4 ||
 		!spec.Command.IncludeTranscript {
 		t.Fatalf("command spec = %#v, want command-backed bridge with config options and commands", spec.Command)
 	}
-	if spec.Command.Commands[0].Name != "init" || spec.Command.Commands[0].InputHint == "" {
-		t.Fatalf("commands = %#v, want init command with input hint", spec.Command.Commands)
+	if spec.Command.Commands[0].Name != "init" || spec.Command.Commands[0].InputHint == "" ||
+		spec.Command.Commands[1].Name != "review" ||
+		spec.Command.Commands[2].Name != "code-review" ||
+		spec.Command.Commands[3].Name != "security-review" {
+		t.Fatalf("commands = %#v, want Claude command set with input hints", spec.Command.Commands)
 	}
 	if id := spec.Command.NewID(); !uuidPattern.MatchString(id) {
 		t.Fatalf("generated session id = %q, want UUID", id)
@@ -248,6 +254,33 @@ func TestPromptCommandBuildsClaudeInitAsPrint(t *testing.T) {
 		"--model", "sonnet",
 		"--effort", "high",
 		"/init focus on repo guidance",
+	}
+	if got.Command != "claude" || got.Dir != "/work" || !reflect.DeepEqual(got.Args, wantArgs) {
+		t.Fatalf("process spec = %#v, want claude args %#v", got, wantArgs)
+	}
+}
+
+func TestPromptCommandBuildsClaudeReviewCommandAsPrint(t *testing.T) {
+	got, err := claudecodeadapter.PromptCommand(commandbridge.Session{
+		ID:  testClaudeSessionID,
+		CWD: "/work",
+		Config: map[string]string{
+			"permission_mode": "dontAsk",
+		},
+	}, runtimeacp.PromptParams{
+		Prompt: []runtimeacp.ContentBlock{{Type: "text", Text: "/security-review focus on auth changes"}},
+	})
+	if err != nil {
+		t.Fatalf("PromptCommand: %v", err)
+	}
+	wantArgs := []string{
+		"--print",
+		"--output-format", "stream-json",
+		"--include-partial-messages",
+		"--verbose",
+		"--session-id", testClaudeSessionID,
+		"--permission-mode", "dontAsk",
+		"/security-review focus on auth changes",
 	}
 	if got.Command != "claude" || got.Dir != "/work" || !reflect.DeepEqual(got.Args, wantArgs) {
 		t.Fatalf("process spec = %#v, want claude args %#v", got, wantArgs)
