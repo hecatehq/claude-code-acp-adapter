@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/hecatehq/acp-adapter-kit/acptest"
+	"github.com/hecatehq/acp-adapter-kit/adaptertest"
 	"github.com/hecatehq/acp-adapter-kit/commandbridge"
 	"github.com/hecatehq/acp-adapter-kit/runtimeacp"
 	"github.com/hecatehq/claude-code-acp-adapter/claudecodeadapter"
@@ -38,30 +39,30 @@ func TestInfoPinsClaudeCapabilities(t *testing.T) {
 }
 
 func TestInitializeAdvertisesLoadSession(t *testing.T) {
-	client := acptest.NewClient(t, claudecodeadapter.NewServer("test"))
+	adaptertest.AssertInitializeContract(t, claudecodeadapter.NewServer("test"), adaptertest.InitializeContract{
+		Name:            claudecodeadapter.Name,
+		Title:           claudecodeadapter.Title,
+		Version:         "test",
+		Images:          true,
+		EmbeddedContext: true,
+		MCPHTTP:         true,
+		MCPSSE:          true,
+		LoadSession:     true,
+		Logout:          true,
+		AuthMethodIDs:   []string{"agent-login"},
+	})
+}
 
-	resp := client.Request("initialize", map[string]any{})
-	var result struct {
-		AgentCapabilities struct {
-			LoadSession bool `json:"loadSession"`
-			Auth        struct {
-				Logout map[string]any `json:"logout"`
-			} `json:"auth"`
-		} `json:"agentCapabilities"`
-		AuthMethods []struct {
-			ID string `json:"id"`
-		} `json:"authMethods"`
-	}
-	resp.ResultInto(t, &result)
-	if !result.AgentCapabilities.LoadSession {
-		t.Fatal("loadSession = false, want true")
-	}
-	if result.AgentCapabilities.Auth.Logout == nil {
-		t.Fatal("auth.logout = nil, want advertised logout capability")
-	}
-	if len(result.AuthMethods) != 1 || result.AuthMethods[0].ID != "agent-login" {
-		t.Fatalf("authMethods = %#v, want agent-login", result.AuthMethods)
-	}
+func TestNewServerExposesHecateControls(t *testing.T) {
+	adaptertest.AssertSessionBootstrapContract(t, claudecodeadapter.NewServer("test"), adaptertest.SessionBootstrapContract{
+		CWD: t.TempDir(),
+		ConfigOptions: []adaptertest.ConfigOptionContract{
+			{ID: "model", Category: "model", CurrentValue: "__default__"},
+			{ID: "effort", Category: "thought_level", CurrentValue: "__default__"},
+			{ID: "permission_mode", Category: "permission", CurrentValue: "dontAsk"},
+		},
+		AvailableCommands: []string{"init", "review", "code-review", "security-review", "compact", "debug", "run", "verify"},
+	})
 }
 
 func TestNewServerCreatesUUIDSessionID(t *testing.T) {

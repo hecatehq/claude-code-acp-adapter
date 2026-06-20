@@ -138,6 +138,9 @@ tool/permission/elicitation parity.
   tools, generic command `tool_call` activity for the outer Claude process,
   in-memory fork capability, bounded transcript replay for later command
   prompts, and prompt completion
+- shared adapter conformance checks for the Hecate-facing ACP initialize
+  contract, advertised auth/logout capabilities, session config selectors, and
+  available slash-command names
 - Coder ACP SDK compatibility guardrails for the adopted protocol primitives:
   JSON-RPC error shape, default initialize protocol version, and selected
   runtime ACP request JSON shapes
@@ -156,7 +159,7 @@ adapter to this one:
 - terminal prompt results beyond parsed command stream updates
 - real vendor-runtime normal cancellation, wedged-runtime forced cancellation, and no
   double-settle behavior
-- auth methods and terminal auth behavior in local/remote environments
+- terminal auth behavior in local/remote environments
 - gateway auth metadata
 - settings resolution, settings trust filtering, and settings reloads
 - model allowlists, model alias discovery, and permission-mode availability by
