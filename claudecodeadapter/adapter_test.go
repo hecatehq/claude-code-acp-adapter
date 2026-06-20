@@ -844,6 +844,67 @@ func TestClaudeStreamParserMapsTerminalStopReason(t *testing.T) {
 	}
 }
 
+func TestClaudeStreamParserMapsSourceShapedFixtures(t *testing.T) {
+	parser := claudecodeadapter.NewStreamParser(commandbridge.Session{}, runtimeacp.PromptParams{})
+	fixture := strings.Join([]string{
+		`{"type":"permission_request","toolUse":{"toolUseId":"tool-1","name":"Bash","input":{"command":"go test ./..."}},"options":[{"optionId":"allow-session","name":"Allow for session","kind":"allow_always"},{"optionId":"deny-once","name":"Deny once","kind":"reject_once"}]}`,
+		`{"type":"assistant","message":{"content":[{"type":"thinking","id":"think-1","thinking":"checking tests"},{"type":"tool_use","id":"tool-1","name":"Bash","input":{"command":"go test ./..."}},{"type":"text","text":"done"}]}}`,
+		`{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"tool-1","content":"ok"}]}}`,
+		`{"type":"result","subtype":"success","usage":{"input_tokens":"4","cache_read_input_tokens":2,"output_tokens":6,"context_window_tokens":128}}`,
+		"",
+	}, "\n")
+
+	events, err := parser.Parse([]byte(fixture))
+	if err != nil {
+		t.Fatalf("Parse returned error: %v", err)
+	}
+	if len(events) != 6 {
+		t.Fatalf("events len = %d, want 6: %#v", len(events), events)
+	}
+	req := events[0].PermissionRequest
+	if req == nil {
+		t.Fatalf("event = %#v, want permission request", events[0])
+	}
+	rawInput, _ := req.RawInput.(map[string]any)
+	if req.ToolCallID != "tool-1" ||
+		req.Title != "Bash" ||
+		req.Kind != "execute" ||
+		rawInput["command"] != "go test ./..." ||
+		len(req.Options) != 2 ||
+		req.Options[0].OptionID != "allow-session" ||
+		req.Options[0].Kind != "allow_always" ||
+		req.Options[1].OptionID != "deny-once" ||
+		req.Options[1].Kind != "reject_once" {
+		t.Fatalf("permission request = %#v, rawInput=%#v, want source-shaped Bash permission", req, rawInput)
+	}
+	if events[1].Update["sessionUpdate"] != "agent_thought_chunk" ||
+		updateText(events[1].Update) != "checking tests" {
+		t.Fatalf("thought = %#v, want thinking text", events[1].Update)
+	}
+	if events[2].Update["sessionUpdate"] != "tool_call" ||
+		events[2].Update["toolCallId"] != "tool-1" ||
+		events[2].Update["kind"] != "execute" {
+		t.Fatalf("tool start = %#v, want Bash tool start", events[2].Update)
+	}
+	if events[3].Update["sessionUpdate"] != "agent_message_chunk" ||
+		parser.Transcript() != "done" {
+		t.Fatalf("message = %#v transcript=%q, want answer transcript", events[3].Update, parser.Transcript())
+	}
+	if events[4].Update["sessionUpdate"] != "tool_call_update" ||
+		events[4].Update["status"] != "completed" ||
+		events[4].Update["rawOutput"] != "ok" {
+		t.Fatalf("tool finish = %#v, want completed tool output", events[4].Update)
+	}
+	if events[5].Update["sessionUpdate"] != "usage_update" ||
+		events[5].Update["used"] != 12 ||
+		events[5].Update["size"] != 128 {
+		t.Fatalf("usage = %#v, want source-shaped usage", events[5].Update)
+	}
+	if got := parser.StopReason(); got != runtimeacp.StopReasonEndTurn {
+		t.Fatalf("StopReason() = %q, want end_turn", got)
+	}
+}
+
 func TestClaudeStreamParserClassifiesProviderTools(t *testing.T) {
 	parser := claudecodeadapter.NewStreamParser(commandbridge.Session{}, runtimeacp.PromptParams{})
 	events, err := parser.Parse([]byte(`{"type":"assistant","message":{"content":[{"type":"tool_use","id":"web-1","name":"WebSearch","input":{"query":"acp"}},{"type":"tool_use","id":"task-1","name":"TaskCreate","input":{"description":"review"}},{"type":"tool_use","id":"memory-1","name":"MemoryRecall","input":{"query":"project"}}]}}` + "\n"))
@@ -935,6 +996,12 @@ func decodeChunkText(t testing.TB, raw json.RawMessage) string {
 		t.Fatalf("decode chunk content: %v\n%s", err, string(raw))
 	}
 	return content.Text
+}
+
+func updateText(update map[string]any) string {
+	content, _ := update["content"].(map[string]any)
+	text, _ := content["text"].(string)
+	return text
 }
 
 func installFakeCommand(t testing.TB, name string, body string) {

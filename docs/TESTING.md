@@ -1,9 +1,10 @@
 # Testing
 
 This repository tests the adapter scaffold, the subprocess-backed ACP runtime
-bridge, and the first native Claude Code command bridge. It does not yet cover
-a complete Claude Agent replacement with persistent vendor sessions and
-tool/permission/elicitation parity.
+bridge, and the native Claude Code command bridge Hecate uses today. Hecate's
+replacement path is covered by Hecate release-binary smoke tests; this adapter
+repo still tracks deeper Claude-native parity before calling the adapter
+production-grade.
 
 ## Covered Today
 
@@ -139,6 +140,8 @@ tool/permission/elicitation parity.
   activity for the outer Claude process,
   in-memory fork capability, bounded transcript replay for later command
   prompts, and prompt completion
+- source-shaped Claude stream fixtures for permission requests, thinking/text
+  content, tool lifecycle updates, usage, and terminal stop reasons
 - shared adapter conformance checks for the Hecate-facing ACP initialize
   contract, advertised auth/logout capabilities, session config selectors, and
   available slash-command names
@@ -156,8 +159,9 @@ tool/permission/elicitation parity.
 
 ## Not Covered Yet
 
-These must be tested before Hecate switches from the current Claude Agent ACP
-adapter to this one:
+These are not blockers for Hecate's current Go-adapter replacement path, but
+they must be covered before treating the adapter as production-grade
+Claude-native parity:
 
 - deeper vendor-specific durable persistent session storage and restore
   semantics beyond Claude `--session-id`
