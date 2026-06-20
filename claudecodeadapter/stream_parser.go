@@ -24,7 +24,8 @@ func NewStreamParser(commandbridge.Session, runtimeacp.PromptParams) commandbrid
 }
 
 func mapClaudeStreamEvent(event map[string]any, seenAssistantText bool) commandbridge.JSONLMapping {
-	switch firstString(event, "type") {
+	eventType := firstString(event, "type")
+	switch eventType {
 	case "assistant":
 		return mapClaudeAssistantMessage(mapValue(event["message"]))
 	case "user":
@@ -32,6 +33,9 @@ func mapClaudeStreamEvent(event map[string]any, seenAssistantText bool) commandb
 	case "result":
 		return mapClaudeResult(event, seenAssistantText)
 	default:
+		if isClaudePermissionRequest(eventType, event) {
+			return mapClaudePermissionRequest(event)
+		}
 		return commandbridge.JSONLMapping{}
 	}
 }
@@ -81,6 +85,73 @@ func mapClaudeUserMessage(message map[string]any) commandbridge.JSONLMapping {
 		out = append(out, commandbridge.ToolCallFinish(id, "", "", status, textValue(block["content"])))
 	}
 	return commandbridge.JSONLMapping{Events: out}
+}
+
+func isClaudePermissionRequest(eventType string, event map[string]any) bool {
+	eventType = strings.ToLower(eventType)
+	if !strings.Contains(eventType, "permission") &&
+		!strings.Contains(eventType, "approval") &&
+		!strings.Contains(eventType, "can_use_tool") {
+		return false
+	}
+	if strings.Contains(eventType, "response") ||
+		strings.Contains(eventType, "result") ||
+		strings.Contains(eventType, "resolved") ||
+		strings.Contains(eventType, "decision") {
+		return false
+	}
+	return len(claudePermissionToolCall(event)) > 0
+}
+
+func mapClaudePermissionRequest(event map[string]any) commandbridge.JSONLMapping {
+	toolCall := claudePermissionToolCall(event)
+	id := firstString(toolCall, "tool_use_id", "toolUseId", "tool_call_id", "toolCallId", "id")
+	title := firstString(toolCall, "title", "name", "tool_name", "toolName")
+	kind := firstString(toolCall, "kind")
+	if kind == "" {
+		kind = claudeToolKind(title)
+	}
+	rawInput := firstValue(toolCall, "rawInput", "raw_input", "input", "arguments")
+	if rawInput == nil {
+		rawInput = firstValue(event, "rawInput", "raw_input", "input", "arguments")
+	}
+	return commandbridge.JSONLMapping{Events: []commandbridge.StreamEvent{
+		commandbridge.ToolCallPermissionRequest(id, title, kind, rawInput, claudePermissionOptions(event)),
+	}}
+}
+
+func claudePermissionToolCall(event map[string]any) map[string]any {
+	for _, key := range []string{"toolCall", "tool_call", "toolUse", "tool_use", "tool"} {
+		if value := mapValue(event[key]); len(value) > 0 {
+			return value
+		}
+	}
+	return event
+}
+
+func claudePermissionOptions(event map[string]any) []commandbridge.PermissionOption {
+	for _, key := range []string{"options", "permission_options", "permissionOptions", "choices"} {
+		raw := sliceValue(event[key])
+		if len(raw) == 0 {
+			continue
+		}
+		options := make([]commandbridge.PermissionOption, 0, len(raw))
+		for _, value := range raw {
+			option := mapValue(value)
+			if len(option) == 0 {
+				continue
+			}
+			options = append(options, commandbridge.PermissionOption{
+				OptionID: firstString(option, "optionId", "option_id", "id", "value"),
+				Name:     firstString(option, "name", "label", "title"),
+				Kind:     firstString(option, "kind", "type"),
+			})
+		}
+		if len(options) > 0 {
+			return options
+		}
+	}
+	return nil
 }
 
 func mapClaudeResult(event map[string]any, seenAssistantText bool) commandbridge.JSONLMapping {
@@ -259,6 +330,30 @@ func boolValue(value any) bool {
 func mapValue(value any) map[string]any {
 	if typed, ok := value.(map[string]any); ok {
 		return typed
+	}
+	return nil
+}
+
+func sliceValue(value any) []any {
+	switch typed := value.(type) {
+	case []any:
+		return typed
+	case []map[string]any:
+		out := make([]any, 0, len(typed))
+		for _, item := range typed {
+			out = append(out, item)
+		}
+		return out
+	default:
+		return nil
+	}
+}
+
+func firstValue(values map[string]any, keys ...string) any {
+	for _, key := range keys {
+		if value, ok := values[key]; ok {
+			return value
+		}
 	}
 	return nil
 }
