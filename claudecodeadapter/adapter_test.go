@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -14,6 +15,10 @@ import (
 	"github.com/hecatehq/acp-adapter-kit/runtimeacp"
 	"github.com/hecatehq/claude-code-acp-adapter/claudecodeadapter"
 )
+
+const testClaudeSessionID = "550e8400-e29b-41d4-a716-446655440000"
+
+var uuidPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
 func TestInfoPinsClaudeCapabilities(t *testing.T) {
 	info := claudecodeadapter.Info("1.2.3")
@@ -47,14 +52,66 @@ func TestInitializeAdvertisesLoadSession(t *testing.T) {
 	}
 }
 
+func TestNewServerCreatesUUIDSessionID(t *testing.T) {
+	client := acptest.NewClient(t, claudecodeadapter.NewServer("test"))
+	created := client.Request("session/new", map[string]any{"cwd": t.TempDir()})
+
+	var session struct {
+		SessionID string `json:"sessionId"`
+	}
+	created.ResultInto(t, &session)
+	if !uuidPattern.MatchString(session.SessionID) {
+		t.Fatalf("session id = %q, want UUID", session.SessionID)
+	}
+}
+
+func TestNewServerLoadsKnownClaudeSessionIDAfterRestart(t *testing.T) {
+	client := acptest.NewClient(t, claudecodeadapter.NewServer("test"))
+
+	loaded := client.Request("session/load", map[string]any{
+		"sessionId": testClaudeSessionID,
+		"cwd":       t.TempDir(),
+	})
+	var loadResult struct {
+		ConfigOptions []struct {
+			ID           string `json:"id"`
+			CurrentValue string `json:"currentValue"`
+		} `json:"configOptions"`
+	}
+	loaded.ResultInto(t, &loadResult)
+	if len(loadResult.ConfigOptions) != 3 {
+		t.Fatalf("config options = %#v, want Claude selectors for adopted session", loadResult.ConfigOptions)
+	}
+
+	listed := client.Request("session/list", map[string]any{})
+	var listResult struct {
+		Sessions []struct {
+			SessionID string `json:"sessionId"`
+		} `json:"sessions"`
+	}
+	listed.ResultInto(t, &listResult)
+	if len(listResult.Sessions) != 1 || listResult.Sessions[0].SessionID != testClaudeSessionID {
+		t.Fatalf("listed sessions = %#v, want adopted Claude session id", listResult.Sessions)
+	}
+}
+
 func TestNewCLISpecExposesLibraryContract(t *testing.T) {
 	spec := claudecodeadapter.NewCLISpec("2.0.0", nil, nil, nil)
 
 	if spec.Info.Name != claudecodeadapter.Name || spec.Info.Version != "2.0.0" {
 		t.Fatalf("spec.Info = %#v", spec.Info)
 	}
-	if spec.Command == nil || spec.Command.BuildPrompt == nil || spec.Command.NewStreamParser == nil || len(spec.Command.Options) != 3 || !spec.Command.IncludeTranscript {
+	if spec.Command == nil ||
+		spec.Command.BuildPrompt == nil ||
+		spec.Command.NewStreamParser == nil ||
+		spec.Command.NewID == nil ||
+		!spec.Command.LoadUnknownSessions ||
+		len(spec.Command.Options) != 3 ||
+		!spec.Command.IncludeTranscript {
 		t.Fatalf("command spec = %#v, want command-backed bridge with config options", spec.Command)
+	}
+	if id := spec.Command.NewID(); !uuidPattern.MatchString(id) {
+		t.Fatalf("generated session id = %q, want UUID", id)
 	}
 	if spec.Doctor == nil || spec.Doctor.Binary != "claude" {
 		t.Fatalf("doctor spec = %#v, want claude doctor", spec.Doctor)
@@ -67,6 +124,7 @@ func TestNewCLISpecExposesLibraryContract(t *testing.T) {
 
 func TestPromptCommandUsesNativeClaudeCLIOnly(t *testing.T) {
 	got, err := claudecodeadapter.PromptCommand(commandbridge.Session{
+		ID:  testClaudeSessionID,
 		CWD: "/work",
 	}, runtimeacp.PromptParams{
 		Prompt: []runtimeacp.ContentBlock{{Type: "text", Text: "hello claude"}},
@@ -91,6 +149,7 @@ func TestPromptCommandUsesNativeClaudeCLIOnly(t *testing.T) {
 
 func TestPromptCommandBuildsClaudePrint(t *testing.T) {
 	got, err := claudecodeadapter.PromptCommand(commandbridge.Session{
+		ID:                    testClaudeSessionID,
 		CWD:                   "/work",
 		AdditionalDirectories: []string{"/extra", ""},
 		Config: map[string]string{
@@ -109,6 +168,7 @@ func TestPromptCommandBuildsClaudePrint(t *testing.T) {
 		"--output-format", "stream-json",
 		"--include-partial-messages",
 		"--verbose",
+		"--session-id", testClaudeSessionID,
 		"--permission-mode", "plan",
 		"--add-dir", "/extra",
 		"--model", "sonnet",
@@ -122,6 +182,7 @@ func TestPromptCommandBuildsClaudePrint(t *testing.T) {
 
 func TestPromptCommandBuildsClaudePrintWithMCPServers(t *testing.T) {
 	got, err := claudecodeadapter.PromptCommand(commandbridge.Session{
+		ID:  testClaudeSessionID,
 		CWD: "/work",
 		MCPServers: []runtimeacp.MCPServer{
 			{
@@ -177,8 +238,21 @@ func TestPromptCommandBuildsClaudePrintWithMCPServers(t *testing.T) {
 	}
 }
 
+func TestPromptCommandRequiresNativeSessionID(t *testing.T) {
+	_, err := claudecodeadapter.PromptCommand(commandbridge.Session{
+		ID:  "session-1",
+		CWD: "/work",
+	}, runtimeacp.PromptParams{
+		Prompt: []runtimeacp.ContentBlock{{Type: "text", Text: "hello"}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "session id must be a UUID") {
+		t.Fatalf("PromptCommand error = %v, want UUID session id required", err)
+	}
+}
+
 func TestPromptCommandRejectsUnsupportedMCPServer(t *testing.T) {
 	_, err := claudecodeadapter.PromptCommand(commandbridge.Session{
+		ID:  testClaudeSessionID,
 		CWD: "/work",
 		MCPServers: []runtimeacp.MCPServer{{
 			Type: "acp",

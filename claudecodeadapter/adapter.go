@@ -4,10 +4,13 @@
 package claudecodeadapter
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
+	"regexp"
 	"strings"
+	"sync/atomic"
 
 	"github.com/hecatehq/acp-adapter-kit/acp"
 	"github.com/hecatehq/acp-adapter-kit/adaptercli"
@@ -23,6 +26,11 @@ const (
 )
 
 const configDefault = "__default__"
+
+var (
+	claudeSessionIDPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+	fallbackSessionID      atomic.Uint64
+)
 
 func NewCLISpec(version string, stdin io.Reader, stdout io.Writer, stderr io.Writer) adaptercli.Spec {
 	return adaptercli.Spec{
@@ -64,10 +72,12 @@ func Options() []acp.Option {
 
 func CommandSpec() *commandbridge.Spec {
 	return &commandbridge.Spec{
-		Options:           ConfigOptions(),
-		IncludeTranscript: true,
-		BuildPrompt:       PromptCommand,
-		NewStreamParser:   NewStreamParser,
+		NewID:               newClaudeSessionID,
+		LoadUnknownSessions: true,
+		Options:             ConfigOptions(),
+		IncludeTranscript:   true,
+		BuildPrompt:         PromptCommand,
+		NewStreamParser:     NewStreamParser,
 	}
 }
 
@@ -125,11 +135,15 @@ func PromptCommand(session commandbridge.Session, params runtimeacp.PromptParams
 	if session.CWD == "" {
 		return adapterprocess.Spec{}, fmt.Errorf("session cwd is required")
 	}
+	if !validClaudeSessionID(session.ID) {
+		return adapterprocess.Spec{}, fmt.Errorf("session id must be a UUID")
+	}
 	args := []string{
 		"--print",
 		"--output-format", "stream-json",
 		"--include-partial-messages",
 		"--verbose",
+		"--session-id", session.ID,
 		"--permission-mode", selectedPermissionMode(session),
 	}
 	for _, dir := range session.AdditionalDirectories {
@@ -154,6 +168,24 @@ func PromptCommand(session commandbridge.Session, params runtimeacp.PromptParams
 		Args:    args,
 		Dir:     session.CWD,
 	}, nil
+}
+
+func newClaudeSessionID() string {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return fallbackClaudeSessionID()
+	}
+	b[6] = (b[6] & 0x0f) | 0x40
+	b[8] = (b[8] & 0x3f) | 0x80
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
+}
+
+func fallbackClaudeSessionID() string {
+	return fmt.Sprintf("00000000-0000-4000-8000-%012x", fallbackSessionID.Add(1))
+}
+
+func validClaudeSessionID(id string) bool {
+	return claudeSessionIDPattern.MatchString(strings.TrimSpace(id))
 }
 
 func claudeMCPConfigArg(servers []runtimeacp.MCPServer) (string, bool, error) {

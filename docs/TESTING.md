@@ -126,12 +126,14 @@ tool/permission/elicitation parity.
   bridge
 - root ACP native command bridge: session creation with Claude model/effort
   config options, permission-mode config option, config updates,
-  `claude --print --output-format stream-json` argv construction, additional
-  workspace directories, ACP stdio/HTTP MCP server config propagation into
-  Claude `--mcp-config`, streamed JSONL parsing into ACP assistant text,
-  thinking, tool-call, and usage updates, generic command `tool_call` activity
-  for the outer Claude process, in-memory load/resume/fork capability, bounded
-  transcript replay for later command prompts, and prompt completion
+  `claude --print --output-format stream-json --session-id` argv construction,
+  Claude UUID session creation, host-known session id adoption on
+  `session/load`, additional workspace directories, ACP stdio/HTTP MCP server
+  config propagation into Claude `--mcp-config`, streamed JSONL parsing into
+  ACP assistant text, thinking, tool-call, and usage updates, generic command
+  `tool_call` activity for the outer Claude process, in-memory fork
+  capability, bounded transcript replay for later command prompts, and prompt
+  completion
 - Coder ACP SDK compatibility guardrails for the adopted protocol primitives:
   JSON-RPC error shape, default initialize protocol version, and selected
   runtime ACP request JSON shapes
@@ -143,8 +145,8 @@ tool/permission/elicitation parity.
 These must be tested before Hecate switches from the current Claude Agent ACP
 adapter to this one:
 
-- vendor-specific durable persistent session storage and restore semantics
-  across adapter process restarts
+- deeper vendor-specific durable persistent session storage and restore
+  semantics beyond Claude `--session-id`
 - Claude-specific session fork persistence/history semantics beyond in-memory
   command-backed state
 - terminal prompt results beyond parsed command stream updates

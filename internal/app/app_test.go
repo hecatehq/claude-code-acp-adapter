@@ -15,6 +15,8 @@ import (
 	adapterprocess "github.com/hecatehq/acp-adapter-kit/process"
 )
 
+const testClaudeSessionID = "550e8400-e29b-41d4-a716-446655440000"
+
 func TestVersionFlag(t *testing.T) {
 	var stdout bytes.Buffer
 	code := Run([]string{"--version"}, nil, &stdout, nil)
@@ -254,19 +256,20 @@ func TestCommandBridgeRunsClaudePrintWithConfigOptions(t *testing.T) {
 	extraDir := t.TempDir()
 	input := strings.NewReader(strings.Join([]string{
 		`{"jsonrpc":"2.0","id":1,"method":"session/new","params":{"cwd":"` + workdir + `","additionalDirectories":["` + extraDir + `"]}}`,
-		`{"jsonrpc":"2.0","id":2,"method":"session/set_config_option","params":{"sessionId":"session-1","configId":"model","value":"sonnet"}}`,
-		`{"jsonrpc":"2.0","id":3,"method":"session/set_config_option","params":{"sessionId":"session-1","configId":"effort","value":"high"}}`,
-		`{"jsonrpc":"2.0","id":4,"method":"session/set_config_option","params":{"sessionId":"session-1","configId":"permission_mode","value":"plan"}}`,
-		`{"jsonrpc":"2.0","id":5,"method":"session/prompt","params":{"sessionId":"session-1","prompt":[{"type":"text","text":"hello claude"}]}}`,
+		`{"jsonrpc":"2.0","id":2,"method":"session/set_config_option","params":{"sessionId":"` + testClaudeSessionID + `","configId":"model","value":"sonnet"}}`,
+		`{"jsonrpc":"2.0","id":3,"method":"session/set_config_option","params":{"sessionId":"` + testClaudeSessionID + `","configId":"effort","value":"high"}}`,
+		`{"jsonrpc":"2.0","id":4,"method":"session/set_config_option","params":{"sessionId":"` + testClaudeSessionID + `","configId":"permission_mode","value":"plan"}}`,
+		`{"jsonrpc":"2.0","id":5,"method":"session/prompt","params":{"sessionId":"` + testClaudeSessionID + `","prompt":[{"type":"text","text":"hello claude"}]}}`,
 	}, "\n") + "\n")
 	spec := adapterSpec(input, &stdout, &stderr)
-	spec.Command.NewID = func() string { return "session-1" }
+	spec.Command.NewID = func() string { return testClaudeSessionID }
 	spec.Command.Runner = commandbridge.RunnerFunc(func(_ context.Context, got adapterprocess.Spec) (adapterprocess.Result, error) {
 		wantArgs := []string{
 			"--print",
 			"--output-format", "stream-json",
 			"--include-partial-messages",
 			"--verbose",
+			"--session-id", testClaudeSessionID,
 			"--permission-mode", "plan",
 			"--add-dir", extraDir,
 			"--model", "sonnet",
@@ -296,7 +299,7 @@ func TestCommandBridgeRunsClaudePrintWithConfigOptions(t *testing.T) {
 		} `json:"configOptions"`
 	}
 	decodeAppResult(t, responses[0], &created)
-	if created.SessionID != "session-1" || len(created.ConfigOptions) != 3 {
+	if created.SessionID != testClaudeSessionID || len(created.ConfigOptions) != 3 {
 		t.Fatalf("created session = %#v, want id and three config options", created)
 	}
 	if created.ConfigOptions[0].ID != "model" || created.ConfigOptions[0].Category != "model" {

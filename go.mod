@@ -7,7 +7,7 @@ require github.com/spf13/cobra v1.10.1 // indirect
 require github.com/coder/acp-go-sdk v0.13.5 // indirect
 
 require (
-	github.com/hecatehq/acp-adapter-kit v0.0.0-20260619201631-a7116924ecac
+	github.com/hecatehq/acp-adapter-kit v0.0.0-20260620021203-f78e56009ab0
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/spf13/pflag v1.0.9 // indirect
 )
