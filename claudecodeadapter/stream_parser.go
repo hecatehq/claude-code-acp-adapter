@@ -113,10 +113,14 @@ func claudeToolKind(name string) string {
 		return "read"
 	case strings.Contains(name, "write"), strings.Contains(name, "edit"), strings.Contains(name, "patch"):
 		return "edit"
-	case strings.Contains(name, "grep"), strings.Contains(name, "glob"), strings.Contains(name, "search"):
-		return "search"
 	case strings.Contains(name, "web"):
 		return "fetch"
+	case strings.Contains(name, "grep"), strings.Contains(name, "glob"), strings.Contains(name, "search"):
+		return "search"
+	case strings.Contains(name, "task"):
+		return "task"
+	case strings.Contains(name, "memory"):
+		return "memory"
 	case strings.Contains(name, "todo"), strings.Contains(name, "plan"), strings.Contains(name, "think"):
 		return "think"
 	default:

@@ -573,6 +573,28 @@ func TestClaudeStreamParserMapsJSONL(t *testing.T) {
 	}
 }
 
+func TestClaudeStreamParserClassifiesProviderTools(t *testing.T) {
+	parser := claudecodeadapter.NewStreamParser(commandbridge.Session{}, runtimeacp.PromptParams{})
+	events, err := parser.Parse([]byte(`{"type":"assistant","message":{"content":[{"type":"tool_use","id":"web-1","name":"WebSearch","input":{"query":"acp"}},{"type":"tool_use","id":"task-1","name":"TaskCreate","input":{"description":"review"}},{"type":"tool_use","id":"memory-1","name":"MemoryRecall","input":{"query":"project"}}]}}` + "\n"))
+	if err != nil {
+		t.Fatalf("Parse returned error: %v", err)
+	}
+	if len(events) != 3 {
+		t.Fatalf("events len = %d, want 3: %#v", len(events), events)
+	}
+	wants := map[string]string{
+		"web-1":    "fetch",
+		"task-1":   "task",
+		"memory-1": "memory",
+	}
+	for _, event := range events {
+		id, _ := event.Update["toolCallId"].(string)
+		if got := event.Update["kind"]; got != wants[id] {
+			t.Fatalf("tool %s kind = %v, want %s", id, got, wants[id])
+		}
+	}
+}
+
 type sessionUpdate struct {
 	Update struct {
 		SessionUpdate     string          `json:"sessionUpdate"`

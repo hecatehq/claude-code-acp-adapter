@@ -133,9 +133,10 @@ tool/permission/elicitation parity.
   advertisement through the normal `claude --print` prompt path, additional
   workspace directories, ACP stdio/HTTP MCP server config propagation into
   Claude `--mcp-config`, streamed JSONL parsing into ACP assistant text,
-  thinking, tool-call, and usage updates, generic command `tool_call` activity
-  for the outer Claude process, in-memory fork capability, bounded transcript
-  replay for later command prompts, and prompt completion
+  thinking, tool-call, and usage updates, Claude tool kind classification for
+  shell/file/web/task/memory/todo/plan tools, generic command `tool_call`
+  activity for the outer Claude process, in-memory fork capability, bounded
+  transcript replay for later command prompts, and prompt completion
 - Coder ACP SDK compatibility guardrails for the adopted protocol primitives:
   JSON-RPC error shape, default initialize protocol version, and selected
   runtime ACP request JSON shapes
@@ -162,8 +163,8 @@ adapter to this one:
 - provider-native permission request/event mapping beyond the selected Claude
   Code permission mode
 - AskUserQuestion and MCP elicitation forms
-- shell, file, edit, grep, glob, web, TODO, task, plan, memory, and
-  terminal-output tool mappings
+- deeper shell, file, edit, grep, glob, web, TODO, task, plan, memory, and
+  terminal-output tool mappings beyond kind classification
 - orphan result skipping after cancelled queued prompts
 - query-closed errors for prompts/cancels after stream termination
 - local slash-command metadata stripping beyond the adapter-owned command set
