@@ -5,6 +5,8 @@ github.com/hecatehq/acp-adapter-kit v0.1.0-alpha.1 h1:7dqA1D2d0u4Yu14Y7eKZ2Xg/0D
 github.com/hecatehq/acp-adapter-kit v0.1.0-alpha.1/go.mod h1:7Wl6fSNPnS2t7EgrLspkEQ5YGjp+yaStebHEHIRjqD8=
 github.com/hecatehq/acp-adapter-kit v0.1.0-alpha.2 h1:ihqbwkNPn3DLFOo/9kTxDe4fLvrXJidyk6yDQTMWtOw=
 github.com/hecatehq/acp-adapter-kit v0.1.0-alpha.2/go.mod h1:7Wl6fSNPnS2t7EgrLspkEQ5YGjp+yaStebHEHIRjqD8=
+github.com/hecatehq/acp-adapter-kit v0.1.0-alpha.3 h1:GzvTtcdoxZnpaBeWspQsjAzUBcwM3WACAw9YohCgiF8=
+github.com/hecatehq/acp-adapter-kit v0.1.0-alpha.3/go.mod h1:7Wl6fSNPnS2t7EgrLspkEQ5YGjp+yaStebHEHIRjqD8=
 github.com/inconshreveable/mousetrap v1.1.0 h1:wN+x4NVGpMsO7ErUn/mUI3vEoE6Jt13X2s0bqwp9tc8=
 github.com/inconshreveable/mousetrap v1.1.0/go.mod h1:vpF70FUmC8bwa3OWnCshd2FqLfsEA9PFc4w1p2J65bw=
 github.com/russross/blackfriday/v2 v2.1.0/go.mod h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQDYRxCVz55jmeOWTM=
