@@ -4,8 +4,9 @@ Neutral Go ACP adapter for Claude Code.
 
 This repository is an alpha Go ACP adapter for Claude Code. It runs as a small,
 auditable binary that speaks ACP over stdio. The adapter can run Claude Code
-prompts through its native command bridge, but full parity with the previous
-Claude Agent ACP adapter is still in progress.
+prompts through its native command bridge. Hecate's replacement path is covered
+by release-binary smoke tests; remaining work is deeper Claude-native parity
+and production release hardening.
 
 ## Goals
 
@@ -65,7 +66,10 @@ Not implemented yet:
 - deeper Claude Code / Claude Agent SDK integration beyond `claude --print`
 - deeper vendor-specific durable/native persistent session semantics beyond
   Claude `--session-id`
-- complete vendor-specific permission/MCP lifecycle/auth/slash-command/elicitation mapping beyond ACP `authenticate`/`logout` and the adapter-owned command set
+- deeper provider-native permission/MCP lifecycle and elicitation edge cases
+  beyond parsed request mapping and the selected Claude Code permission mode
+- deeper Claude-native slash-command semantics beyond the adapter-owned command
+  set
 - runtime config/auth/model discovery and orphan-result handling
 - production signing/provenance for release artifacts
 
@@ -95,9 +99,8 @@ go run ./cmd/claude-code-acp-adapter --version
 go run ./cmd/claude-code-acp-adapter doctor
 ```
 
-See [docs/TESTING.md](docs/TESTING.md) for what is covered today and what must
-be covered before this adapter can be used as the default production Claude
-Agent ACP bridge.
+See [docs/TESTING.md](docs/TESTING.md) for what is covered today and what still
+needs production-grade/deeper Claude-native parity coverage.
 See [docs/RELEASE.md](docs/RELEASE.md) for the tag-driven release flow.
 
 ## CLI Contract

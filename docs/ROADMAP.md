@@ -80,12 +80,16 @@
 - keep adapter-owned slash commands explicit: `/init`, `/review`,
   `/code-review`, and `/security-review` stay on the normal `claude --print`
   prompt path, and additional commands need parity tests before being exposed
-- implement auth/session/prompt/cancel/config/mcp/tool/elicitation mappings
-  that are not covered by the first command-backed path
+- continue hardening auth/session/prompt/cancel/config/mcp/tool mappings with
+  source-shaped parser fixtures and real Hecate release-binary smoke tests;
+  deeper elicitation and provider-native permission edge cases remain parity
+  work
 - port the edge cases recorded in `SOURCE_REVIEW.md`
 
 ## Phase 4: Release and Hecate Integration
 
 - signed/provenance-backed release hardening
-- Hecate registry entry points at the `claude-code-acp-adapter` release binary
+- keep Hecate registry/Dockerfile pins pointed at the released
+  `claude-code-acp-adapter` binary, and run Hecate's ACP adapter release smoke
+  after every adapter release bump
 - no Hecate runtime launch path depends on a package-manager adapter wrapper
