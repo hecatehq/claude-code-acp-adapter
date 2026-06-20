@@ -14,7 +14,7 @@ Claude Code-specific behavior belongs here:
 - Anthropic/Claude environment allowlist;
 - Claude Code-specific ACP quirks, docs, and release workflow.
 
-Do not reintroduce npm/npx runtime launch paths. Process-backed paths must use
+Do not add package-manager runtime launch paths. Process-backed paths must use
 fixed argv arrays, explicit environment allowlists, bounded output capture, and
 the kit runtime/process seams.
 
