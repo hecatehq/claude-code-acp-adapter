@@ -44,11 +44,23 @@ func TestInitializeAdvertisesLoadSession(t *testing.T) {
 	var result struct {
 		AgentCapabilities struct {
 			LoadSession bool `json:"loadSession"`
+			Auth        struct {
+				Logout map[string]any `json:"logout"`
+			} `json:"auth"`
 		} `json:"agentCapabilities"`
+		AuthMethods []struct {
+			ID string `json:"id"`
+		} `json:"authMethods"`
 	}
 	resp.ResultInto(t, &result)
 	if !result.AgentCapabilities.LoadSession {
 		t.Fatal("loadSession = false, want true")
+	}
+	if result.AgentCapabilities.Auth.Logout == nil {
+		t.Fatal("auth.logout = nil, want advertised logout capability")
+	}
+	if len(result.AuthMethods) != 1 || result.AuthMethods[0].ID != "agent-login" {
+		t.Fatalf("authMethods = %#v, want agent-login", result.AuthMethods)
 	}
 }
 
@@ -149,14 +161,19 @@ func TestNewCLISpecExposesLibraryContract(t *testing.T) {
 	}
 	if spec.Command == nil ||
 		spec.Command.BuildPrompt == nil ||
+		spec.Command.BuildAuthenticate == nil ||
 		spec.Command.BuildLogout == nil ||
 		spec.Command.NewStreamParser == nil ||
 		spec.Command.NewID == nil ||
 		!spec.Command.LoadUnknownSessions ||
+		len(spec.Command.AuthMethods) != 1 ||
 		len(spec.Command.Options) != 3 ||
 		len(spec.Command.Commands) != 8 ||
 		!spec.Command.IncludeTranscript {
 		t.Fatalf("command spec = %#v, want command-backed bridge with config options and commands", spec.Command)
+	}
+	if spec.Command.AuthMethods[0].ID != "agent-login" || spec.Command.AuthMethods[0].Name != "Claude Code login" {
+		t.Fatalf("auth methods = %#v, want Claude Code login", spec.Command.AuthMethods)
 	}
 	if spec.Command.Commands[0].Name != "init" || spec.Command.Commands[0].InputHint == "" ||
 		spec.Command.Commands[1].Name != "review" ||
@@ -217,6 +234,24 @@ func TestLogoutCommandUsesNativeClaudeCLIOnly(t *testing.T) {
 	assertNoPackageRunnerCommand(t, got.Command)
 	if got.Command != "claude" || got.Dir != cwd || !reflect.DeepEqual(got.Args, []string{"auth", "logout"}) {
 		t.Fatalf("process spec = %#v, want claude auth logout", got)
+	}
+}
+
+func TestAuthenticateCommandUsesNativeClaudeCLIOnly(t *testing.T) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd: %v", err)
+	}
+	got, err := claudecodeadapter.AuthenticateCommand("agent-login")
+	if err != nil {
+		t.Fatalf("AuthenticateCommand: %v", err)
+	}
+	assertNoPackageRunnerCommand(t, got.Command)
+	if got.Command != "claude" || got.Dir != cwd || !reflect.DeepEqual(got.Args, []string{"/login"}) {
+		t.Fatalf("process spec = %#v, want claude /login", got)
+	}
+	if _, err := claudecodeadapter.AuthenticateCommand("browser-login"); err == nil || !strings.Contains(err.Error(), "unsupported auth method") {
+		t.Fatalf("AuthenticateCommand unsupported error = %v, want unsupported auth method", err)
 	}
 }
 
@@ -456,6 +491,24 @@ printf 'logged out\n'
 	resp.ResultInto(t, &result)
 	if len(result) != 0 {
 		t.Fatalf("logout result = %#v, want empty object", result)
+	}
+}
+
+func TestNewServerRunsAuthenticateCommand(t *testing.T) {
+	installFakeCommand(t, "claude", `
+if [ "$1" != "/login" ]; then
+  echo "unexpected command: $*" >&2
+  exit 64
+fi
+printf 'logged in\n'
+`)
+	client := acptest.NewClient(t, claudecodeadapter.NewServer("test"))
+
+	resp := client.Request("authenticate", map[string]any{"methodId": "agent-login"})
+	var result map[string]any
+	resp.ResultInto(t, &result)
+	if len(result) != 0 {
+		t.Fatalf("authenticate result = %#v, want empty object", result)
 	}
 }
 

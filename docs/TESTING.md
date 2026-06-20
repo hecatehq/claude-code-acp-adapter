@@ -187,6 +187,8 @@ Keep this repository's tests focused on Claude Code-specific adapter behavior:
 - `doctor` command defaults for the Claude binary and Claude environment list;
 - runtime flag wiring from Cobra into the shared runtime host;
 - command-backed `claude --print` argv construction and config-option mapping;
+- command-backed ACP `authenticate` mapping to the native `claude /login`
+  command;
 - command-backed ACP `logout` mapping to the native `claude auth logout`
   command;
 - Claude-specific prompt, tool, permission, config, model, MCP, auth, and

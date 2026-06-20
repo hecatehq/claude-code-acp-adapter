@@ -27,6 +27,7 @@ const (
 )
 
 const configDefault = "__default__"
+const authMethodAgentLogin = "agent-login"
 
 var (
 	claudeSessionIDPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
@@ -77,11 +78,21 @@ func CommandSpec() *commandbridge.Spec {
 		LoadUnknownSessions: true,
 		Options:             ConfigOptions(),
 		Commands:            AvailableCommands(),
+		AuthMethods:         AuthMethods(),
 		IncludeTranscript:   true,
 		BuildPrompt:         PromptCommand,
+		BuildAuthenticate:   AuthenticateCommand,
 		BuildLogout:         LogoutCommand,
 		NewStreamParser:     NewStreamParser,
 	}
+}
+
+func AuthMethods() []acp.AuthMethod {
+	return []acp.AuthMethod{{
+		ID:          authMethodAgentLogin,
+		Name:        "Claude Code login",
+		Description: "Sign in with the local Claude Code CLI.",
+	}}
 }
 
 func AvailableCommands() []commandbridge.AvailableCommand {
@@ -227,6 +238,21 @@ func LogoutCommand() (adapterprocess.Spec, error) {
 	return adapterprocess.Spec{
 		Command: "claude",
 		Args:    []string{"auth", "logout"},
+		Dir:     dir,
+	}, nil
+}
+
+func AuthenticateCommand(methodID string) (adapterprocess.Spec, error) {
+	if strings.TrimSpace(methodID) != authMethodAgentLogin {
+		return adapterprocess.Spec{}, fmt.Errorf("unsupported auth method %q", methodID)
+	}
+	dir, err := os.Getwd()
+	if err != nil {
+		return adapterprocess.Spec{}, err
+	}
+	return adapterprocess.Spec{
+		Command: "claude",
+		Args:    []string{"/login"},
 		Dir:     dir,
 	}, nil
 }
