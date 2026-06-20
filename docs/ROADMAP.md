@@ -24,9 +24,10 @@
 ## Phase 3: Claude Code Runtime Bridge
 
 - use `acp-adapter-kit/commandbridge` for the first native direct-CLI path:
-  lightweight ACP sessions keyed by Claude UUID session ids, one
-  `claude --print --session-id` process per prompt, stdout forwarded as
-  assistant text, and ACP cancel mapped to process cancellation
+  lightweight ACP sessions keyed by Claude UUID session ids, `claude --print`
+  with `--session-id` for fresh native sessions and `--resume` for
+  continuations, stdout forwarded as assistant text, and ACP cancel mapped to
+  process cancellation
 - use `acp-adapter-kit/process` for every subprocess boundary
 - use `acp-adapter-kit/runtimeproc` as the only process-backed runtime launcher
 - use `acp-adapter-kit/runtimejsonrpc` for newline-delimited JSON-RPC over
