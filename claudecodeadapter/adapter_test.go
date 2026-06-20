@@ -54,7 +54,16 @@ func TestInitializeAdvertisesLoadSession(t *testing.T) {
 
 func TestNewServerCreatesUUIDSessionID(t *testing.T) {
 	client := acptest.NewClient(t, claudecodeadapter.NewServer("test"))
-	created := client.Request("session/new", map[string]any{"cwd": t.TempDir()})
+	responses := client.Send(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "session/new",
+		"params":  map[string]any{"cwd": t.TempDir()},
+	})
+	if len(responses) != 2 {
+		t.Fatalf("responses = %#v, want available command update + session response", responses)
+	}
+	created := responses[1]
 
 	var session struct {
 		SessionID string `json:"sessionId"`
@@ -68,10 +77,19 @@ func TestNewServerCreatesUUIDSessionID(t *testing.T) {
 func TestNewServerLoadsKnownClaudeSessionIDAfterRestart(t *testing.T) {
 	client := acptest.NewClient(t, claudecodeadapter.NewServer("test"))
 
-	loaded := client.Request("session/load", map[string]any{
-		"sessionId": testClaudeSessionID,
-		"cwd":       t.TempDir(),
+	responses := client.Send(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "session/load",
+		"params": map[string]any{
+			"sessionId": testClaudeSessionID,
+			"cwd":       t.TempDir(),
+		},
 	})
+	if len(responses) != 2 {
+		t.Fatalf("responses = %#v, want available command update + load response", responses)
+	}
+	loaded := responses[1]
 	var loadResult struct {
 		ConfigOptions []struct {
 			ID           string `json:"id"`
@@ -95,6 +113,27 @@ func TestNewServerLoadsKnownClaudeSessionIDAfterRestart(t *testing.T) {
 	}
 }
 
+func TestNewServerPublishesAvailableCommands(t *testing.T) {
+	client := acptest.NewClient(t, claudecodeadapter.NewServer("test"))
+	client.Request("initialize", map[string]any{})
+	responses := client.Send(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      2,
+		"method":  "session/new",
+		"params":  map[string]any{"cwd": t.TempDir()},
+	})
+	if len(responses) != 2 {
+		t.Fatalf("responses = %#v, want available command update + session response", responses)
+	}
+	update := decodeSessionUpdate(t, responses[0])
+	if update.Update.SessionUpdate != "available_commands_update" ||
+		len(update.Update.AvailableCommands) != 1 ||
+		update.Update.AvailableCommands[0].Name != "init" ||
+		update.Update.AvailableCommands[0].Input.Unstructured.Hint != "optional instruction focus" {
+		t.Fatalf("available commands = %#v, want init command", update)
+	}
+}
+
 func TestNewCLISpecExposesLibraryContract(t *testing.T) {
 	spec := claudecodeadapter.NewCLISpec("2.0.0", nil, nil, nil)
 
@@ -107,8 +146,12 @@ func TestNewCLISpecExposesLibraryContract(t *testing.T) {
 		spec.Command.NewID == nil ||
 		!spec.Command.LoadUnknownSessions ||
 		len(spec.Command.Options) != 3 ||
+		len(spec.Command.Commands) != 1 ||
 		!spec.Command.IncludeTranscript {
-		t.Fatalf("command spec = %#v, want command-backed bridge with config options", spec.Command)
+		t.Fatalf("command spec = %#v, want command-backed bridge with config options and commands", spec.Command)
+	}
+	if spec.Command.Commands[0].Name != "init" || spec.Command.Commands[0].InputHint == "" {
+		t.Fatalf("commands = %#v, want init command with input hint", spec.Command.Commands)
 	}
 	if id := spec.Command.NewID(); !uuidPattern.MatchString(id) {
 		t.Fatalf("generated session id = %q, want UUID", id)
@@ -174,6 +217,37 @@ func TestPromptCommandBuildsClaudePrint(t *testing.T) {
 		"--model", "sonnet",
 		"--effort", "high",
 		"hello claude",
+	}
+	if got.Command != "claude" || got.Dir != "/work" || !reflect.DeepEqual(got.Args, wantArgs) {
+		t.Fatalf("process spec = %#v, want claude args %#v", got, wantArgs)
+	}
+}
+
+func TestPromptCommandBuildsClaudeInitAsPrint(t *testing.T) {
+	got, err := claudecodeadapter.PromptCommand(commandbridge.Session{
+		ID:  testClaudeSessionID,
+		CWD: "/work",
+		Config: map[string]string{
+			"model":           "sonnet",
+			"effort":          "high",
+			"permission_mode": "plan",
+		},
+	}, runtimeacp.PromptParams{
+		Prompt: []runtimeacp.ContentBlock{{Type: "text", Text: "/init focus on repo guidance"}},
+	})
+	if err != nil {
+		t.Fatalf("PromptCommand: %v", err)
+	}
+	wantArgs := []string{
+		"--print",
+		"--output-format", "stream-json",
+		"--include-partial-messages",
+		"--verbose",
+		"--session-id", testClaudeSessionID,
+		"--permission-mode", "plan",
+		"--model", "sonnet",
+		"--effort", "high",
+		"/init focus on repo guidance",
 	}
 	if got.Command != "claude" || got.Dir != "/work" || !reflect.DeepEqual(got.Args, wantArgs) {
 		t.Fatalf("process spec = %#v, want claude args %#v", got, wantArgs)
@@ -281,7 +355,16 @@ printf '{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id"
 `)
 	client := acptest.NewClient(t, claudecodeadapter.NewServer("test"))
 	client.Request("initialize", map[string]any{})
-	created := client.Request("session/new", map[string]any{"cwd": t.TempDir()})
+	createdResponses := client.Send(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      2,
+		"method":  "session/new",
+		"params":  map[string]any{"cwd": t.TempDir()},
+	})
+	if len(createdResponses) != 2 {
+		t.Fatalf("create responses = %#v, want available command update + session response", createdResponses)
+	}
+	created := createdResponses[1]
 	var session struct {
 		SessionID string `json:"sessionId"`
 	}
@@ -416,16 +499,25 @@ func TestClaudeStreamParserMapsJSONL(t *testing.T) {
 
 type sessionUpdate struct {
 	Update struct {
-		SessionUpdate string          `json:"sessionUpdate"`
-		ToolCallID    string          `json:"toolCallId"`
-		Title         string          `json:"title"`
-		Kind          string          `json:"kind"`
-		Status        string          `json:"status"`
-		RawInput      map[string]any  `json:"rawInput"`
-		Used          int             `json:"used"`
-		Size          int             `json:"size"`
-		Content       json.RawMessage `json:"content"`
-		UpdatedAt     string          `json:"updatedAt"`
+		SessionUpdate     string          `json:"sessionUpdate"`
+		ToolCallID        string          `json:"toolCallId"`
+		Title             string          `json:"title"`
+		Kind              string          `json:"kind"`
+		Status            string          `json:"status"`
+		RawInput          map[string]any  `json:"rawInput"`
+		Used              int             `json:"used"`
+		Size              int             `json:"size"`
+		Content           json.RawMessage `json:"content"`
+		UpdatedAt         string          `json:"updatedAt"`
+		AvailableCommands []struct {
+			Name        string `json:"name"`
+			Description string `json:"description"`
+			Input       struct {
+				Unstructured struct {
+					Hint string `json:"hint"`
+				} `json:"unstructured"`
+			} `json:"input"`
+		} `json:"availableCommands"`
 	} `json:"update"`
 }
 

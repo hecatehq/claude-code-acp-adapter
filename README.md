@@ -48,6 +48,8 @@ Implemented:
 - command-backed `session/list` metadata, `config_option_update`
   notifications for config changes, and `session_info_update` notifications
   when transcript metadata changes
+- command-backed `/init` advertisement through the normal `claude --print`
+  prompt path
 - command-backed ACP stdio/HTTP MCP server config propagation into Claude
   `--mcp-config` with `--strict-mcp-config`
 - Claude `--output-format stream-json` translation into ACP assistant text,
@@ -60,7 +62,7 @@ Not implemented yet:
 - deeper Claude Code / Claude Agent SDK integration beyond `claude --print`
 - deeper vendor-specific durable/native persistent session semantics beyond
   Claude `--session-id`
-- complete vendor-specific permission/MCP lifecycle/auth/slash-command/elicitation mapping
+- complete vendor-specific permission/MCP lifecycle/auth/slash-command/elicitation mapping beyond the adapter-owned `/init` command
 - runtime config/auth/model discovery and orphan-result handling
 - production signing/provenance for release artifacts
 
@@ -127,6 +129,9 @@ native session id. Config changes return the current config option list and
 publish `config_option_update` notifications. Completed command-backed prompts
 publish `session_info_update` notifications with the in-memory title and
 updated timestamp when transcript metadata changes.
+The adapter advertises `/init` as an ACP available command and passes it through
+the normal `claude --print` prompt path so Claude Code can inspect the workspace
+and create or update `CLAUDE.md`.
 
 The root ACP server can also launch an explicit subprocess-backed ACP runtime
 with `--runtime-binary`, `--runtime-workdir`, and repeated `--runtime-arg`

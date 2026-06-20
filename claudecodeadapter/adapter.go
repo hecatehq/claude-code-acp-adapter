@@ -75,9 +75,20 @@ func CommandSpec() *commandbridge.Spec {
 		NewID:               newClaudeSessionID,
 		LoadUnknownSessions: true,
 		Options:             ConfigOptions(),
+		Commands:            AvailableCommands(),
 		IncludeTranscript:   true,
 		BuildPrompt:         PromptCommand,
 		NewStreamParser:     NewStreamParser,
+	}
+}
+
+func AvailableCommands() []commandbridge.AvailableCommand {
+	return []commandbridge.AvailableCommand{
+		{
+			Name:        "init",
+			Description: "Ask Claude Code to inspect the workspace and create or update CLAUDE.md.",
+			InputHint:   "optional instruction focus",
+		},
 	}
 }
 

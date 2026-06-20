@@ -77,6 +77,9 @@
   which would change the adapter's current initialize wire shape
 - expand the native Claude Code / Claude Agent integration boundary beyond
   `claude --print`
+- keep adapter-owned slash commands explicit: `/init` stays on the normal
+  `claude --print` prompt path, and additional commands need parity tests before
+  being exposed
 - implement auth/session/prompt/cancel/config/mcp/tool/elicitation mappings
   that are not covered by the first command-backed path
 - port the edge cases recorded in `SOURCE_REVIEW.md`
