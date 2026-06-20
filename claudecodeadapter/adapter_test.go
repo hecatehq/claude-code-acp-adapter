@@ -529,6 +529,52 @@ printf 'logged in\n'
 	}
 }
 
+func TestNewServerMapsPromptAuthFailure(t *testing.T) {
+	installFakeCommand(t, "claude", `
+if [ "$1" != "--print" ]; then
+  echo "unexpected command: $*" >&2
+  exit 64
+fi
+echo "Authentication required. Please run claude /login." >&2
+exit 1
+`)
+	client := acptest.NewClient(t, claudecodeadapter.NewServer("test"))
+	client.Request("initialize", map[string]any{})
+	createdResponses := client.Send(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      2,
+		"method":  "session/new",
+		"params":  map[string]any{"cwd": t.TempDir()},
+	})
+	if len(createdResponses) != 2 {
+		t.Fatalf("create responses = %#v, want available commands + session response", createdResponses)
+	}
+	var session struct {
+		SessionID string `json:"sessionId"`
+	}
+	createdResponses[1].ResultInto(t, &session)
+
+	responses := client.Send(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      3,
+		"method":  "session/prompt",
+		"params": map[string]any{
+			"sessionId": session.SessionID,
+			"prompt":    []map[string]any{{"type": "text", "text": "hello"}},
+		},
+	})
+	if len(responses) != 3 {
+		t.Fatalf("responses = %#v, want tool start + tool finish + auth error", responses)
+	}
+	if responses[2].Error == nil || responses[2].Error.Code != -32000 || responses[2].Error.Message != "Authentication required" {
+		t.Fatalf("prompt error = %#v, want auth required", responses[2].Error)
+	}
+	raw, _ := json.Marshal(responses[2].Error.Data)
+	if !strings.Contains(string(raw), "claude /login") {
+		t.Fatalf("auth error data = %s, want login hint", raw)
+	}
+}
+
 func TestNewServerStreamsNativeClaudeOutput(t *testing.T) {
 	installFakeCommand(t, "claude", `
 if [ "$1" != "--print" ]; then
