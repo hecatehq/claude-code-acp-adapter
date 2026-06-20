@@ -41,9 +41,9 @@ Implemented:
 - command-backed native Claude Code path using `claude --print`
 - ACP model, effort, and permission-mode config options for the command-backed
   path
-- command-backed Claude UUID session ids passed to `claude --session-id`,
-  including `session/load` / `session/resume` adoption of host-known ids after
-  adapter process restart
+- command-backed Claude UUID session ids created with `claude --session-id` and
+  continued with `claude --resume`, including `session/load` / `session/resume`
+  adoption of host-known ids after adapter process restart
 - in-memory command-backed session fork plus bounded transcript replay for
   multi-turn continuity while the adapter process is alive
 - command-backed `session/list` metadata, `config_option_update`
@@ -65,7 +65,7 @@ Not implemented yet:
 
 - deeper Claude Code / Claude Agent SDK integration beyond `claude --print`
 - deeper vendor-specific durable/native persistent session semantics beyond
-  Claude `--session-id`
+  Claude `--session-id` creation and `--resume` continuation
 - deeper provider-native permission/MCP lifecycle and elicitation edge cases
   beyond parsed request mapping and the selected Claude Code permission mode
 - deeper Claude-native slash-command semantics beyond the adapter-owned command
@@ -128,17 +128,17 @@ task tools, memory recall, todos, and plan/thinking tools; unknown JSONL events
 are ignored rather than shown as raw chat text. A generic `tool_call` still
 wraps the native Claude process execution so hosts can show the outer command
 boundary. The session state is lightweight in the adapter, but session ids are
-Claude-native UUIDs
-passed to `claude --session-id`. `session/load` and `session/resume` can adopt a
-host-known Claude session id after an adapter process restart; `session/fork`
-and transcript replay remain in-memory conveniences while the adapter process
-is alive. `session/list` returns the adapter's currently loaded session
-metadata, and later prompts receive a bounded transcript prelude so
-command-backed turns keep conversational context while still using Claude's
-native session id. Config changes return the current config option list and
-publish `config_option_update` notifications. Completed command-backed prompts
-publish `session_info_update` notifications with the in-memory title and
-updated timestamp when transcript metadata changes.
+Claude-native UUIDs. New sessions are created with `claude --session-id`; later
+prompts and host-known sessions adopted through `session/load` or
+`session/resume` continue with `claude --resume`. `session/fork` and transcript
+replay remain in-memory conveniences while the adapter process is alive.
+`session/list` returns the adapter's currently loaded session metadata, and
+later prompts receive a bounded transcript prelude so command-backed turns keep
+conversational context while still using Claude's native session id. Config
+changes return the current config option list and publish
+`config_option_update` notifications. Completed command-backed prompts publish
+`session_info_update` notifications with the in-memory title and updated
+timestamp when transcript metadata changes.
 The adapter advertises `/init`, `/review`, `/code-review`, `/security-review`,
 `/compact`, `/debug`, `/run`, and `/verify` as ACP available commands and passes
 them through the normal `claude --print` prompt path. Other Claude Code commands

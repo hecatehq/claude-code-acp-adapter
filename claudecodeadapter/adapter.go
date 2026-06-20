@@ -204,9 +204,13 @@ func PromptCommand(session commandbridge.Session, params runtimeacp.PromptParams
 		"--output-format", "stream-json",
 		"--include-partial-messages",
 		"--verbose",
-		"--session-id", session.ID,
-		"--permission-mode", selectedPermissionMode(session),
 	}
+	if session.Adopted || session.PromptCount > 0 {
+		args = append(args, "--resume", session.ID)
+	} else {
+		args = append(args, "--session-id", session.ID)
+	}
+	args = append(args, "--permission-mode", selectedPermissionMode(session))
 	for _, dir := range session.AdditionalDirectories {
 		if dir != "" {
 			args = append(args, "--add-dir", dir)

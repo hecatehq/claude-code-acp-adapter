@@ -314,6 +314,56 @@ func TestPromptCommandBuildsClaudePrint(t *testing.T) {
 	}
 }
 
+func TestPromptCommandResumesEstablishedClaudeSession(t *testing.T) {
+	got, err := claudecodeadapter.PromptCommand(commandbridge.Session{
+		ID:          testClaudeSessionID,
+		CWD:         "/work",
+		PromptCount: 1,
+		Config: map[string]string{
+			"permission_mode": "dontAsk",
+		},
+	}, runtimeacp.PromptParams{
+		Prompt: []runtimeacp.ContentBlock{{Type: "text", Text: "hello again"}},
+	})
+	if err != nil {
+		t.Fatalf("PromptCommand: %v", err)
+	}
+	wantArgs := []string{
+		"--print",
+		"--output-format", "stream-json",
+		"--include-partial-messages",
+		"--verbose",
+		"--resume", testClaudeSessionID,
+		"--permission-mode", "dontAsk",
+		"hello again",
+	}
+	if got.Command != "claude" || got.Dir != "/work" || !reflect.DeepEqual(got.Args, wantArgs) {
+		t.Fatalf("process spec = %#v, want claude args %#v", got, wantArgs)
+	}
+}
+
+func TestPromptCommandResumesAdoptedClaudeSession(t *testing.T) {
+	got, err := claudecodeadapter.PromptCommand(commandbridge.Session{
+		ID:      testClaudeSessionID,
+		CWD:     "/work",
+		Adopted: true,
+		Config: map[string]string{
+			"permission_mode": "dontAsk",
+		},
+	}, runtimeacp.PromptParams{
+		Prompt: []runtimeacp.ContentBlock{{Type: "text", Text: "loaded session prompt"}},
+	})
+	if err != nil {
+		t.Fatalf("PromptCommand: %v", err)
+	}
+	if indexOfArg(got.Args, "--resume") < 0 {
+		t.Fatalf("args = %#v, want --resume for adopted session", got.Args)
+	}
+	if indexOfArg(got.Args, "--session-id") >= 0 {
+		t.Fatalf("args = %#v, did not expect --session-id for adopted session", got.Args)
+	}
+}
+
 func TestConfigOptionsExposeClaudeBypassPermissionsMode(t *testing.T) {
 	options := claudecodeadapter.ConfigOptions()
 	for _, option := range options {
@@ -684,6 +734,48 @@ printf '{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id"
 	}
 }
 
+func TestNewServerResumesClaudeSessionAfterFirstPrompt(t *testing.T) {
+	argLog := filepath.Join(t.TempDir(), "claude-args.log")
+	installFakeCommand(t, "claude", `
+printf '%s\037' "$*" >> '`+argLog+`'
+if [ "$1" != "--print" ]; then
+  echo "unexpected command: $*" >&2
+  exit 64
+fi
+printf '{"type":"assistant","message":{"content":[{"type":"text","text":"ok"}]}}\n'
+`)
+	client := acptest.NewClient(t, claudecodeadapter.NewServer("test"))
+	client.Request("initialize", map[string]any{})
+	createdResponses := client.Send(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      2,
+		"method":  "session/new",
+		"params":  map[string]any{"cwd": t.TempDir()},
+	})
+	var session struct {
+		SessionID string `json:"sessionId"`
+	}
+	createdResponses[1].ResultInto(t, &session)
+
+	client.Send(promptRequest(3, session.SessionID, "first"))
+	client.Send(promptRequest(4, session.SessionID, "second"))
+
+	raw, err := os.ReadFile(argLog)
+	if err != nil {
+		t.Fatalf("read arg log: %v", err)
+	}
+	lines := strings.Split(strings.TrimSuffix(string(raw), "\x1f"), "\x1f")
+	if len(lines) != 2 {
+		t.Fatalf("arg log = %q, want two prompt invocations", raw)
+	}
+	if !strings.Contains(lines[0], "--session-id "+session.SessionID) || strings.Contains(lines[0], "--resume "+session.SessionID) {
+		t.Fatalf("first prompt args = %q, want --session-id only", lines[0])
+	}
+	if !strings.Contains(lines[1], "--resume "+session.SessionID) || strings.Contains(lines[1], "--session-id "+session.SessionID) {
+		t.Fatalf("second prompt args = %q, want --resume only", lines[1])
+	}
+}
+
 func TestNewServerRequestsPermissionFromClaudeStream(t *testing.T) {
 	installFakeCommand(t, "claude", `
 if [ "$1" != "--print" ]; then
@@ -1011,6 +1103,18 @@ func updateText(update map[string]any) string {
 	content, _ := update["content"].(map[string]any)
 	text, _ := content["text"].(string)
 	return text
+}
+
+func promptRequest(id int, sessionID, prompt string) map[string]any {
+	return map[string]any{
+		"jsonrpc": "2.0",
+		"id":      id,
+		"method":  "session/prompt",
+		"params": map[string]any{
+			"sessionId": sessionID,
+			"prompt":    []map[string]any{{"type": "text", "text": prompt}},
+		},
+	}
 }
 
 func installFakeCommand(t testing.TB, name string, body string) {

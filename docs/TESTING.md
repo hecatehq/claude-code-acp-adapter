@@ -128,8 +128,9 @@ production-grade.
 - root ACP native command bridge: session creation with Claude model/effort
   config options, permission-mode config option including `bypassPermissions`,
   config updates, explicit native command environment allowlists,
-  `claude --print --output-format stream-json --session-id` argv construction,
-  Claude UUID session creation, host-known session id adoption on
+  `claude --print --output-format stream-json` argv construction with
+  `--session-id` for fresh sessions and `--resume` for continuations, Claude
+  UUID session creation, host-known session id adoption on
   `session/load`, `/init`/`/review`/`/code-review`/`/security-review`
   `/compact`/`/debug`/`/run`/`/verify` advertisement through the normal
   `claude --print` prompt path, additional workspace directories, ACP stdio/HTTP
