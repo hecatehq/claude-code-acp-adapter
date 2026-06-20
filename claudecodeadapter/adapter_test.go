@@ -126,6 +126,22 @@ func TestNewServerLoadsKnownClaudeSessionIDAfterRestart(t *testing.T) {
 	}
 }
 
+func TestNewServerMatchesPortableUpstreamParity(t *testing.T) {
+	adaptertest.AssertUpstreamParityContract(t, claudecodeadapter.NewServer("test"), adaptertest.UpstreamParityContract{
+		CWD:          t.TempDir(),
+		AuthMethodID: "agent-login",
+		ConfigChange: adaptertest.ConfigChangeContract{
+			ID:    "model",
+			Value: "sonnet",
+		},
+		LoadUnknownSession: adaptertest.LoadUnknownSessionContract{
+			SessionID: "550e8400-e29b-41d4-a716-446655440001",
+			CWD:       t.TempDir(),
+			Allowed:   true,
+		},
+	})
+}
+
 func TestNewServerPublishesAvailableCommands(t *testing.T) {
 	client := acptest.NewClient(t, claudecodeadapter.NewServer("test"))
 	client.Request("initialize", map[string]any{})
