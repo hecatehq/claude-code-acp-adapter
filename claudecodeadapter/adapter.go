@@ -104,6 +104,26 @@ func AvailableCommands() []commandbridge.AvailableCommand {
 			Description: "Ask Claude Code to analyze pending changes for security vulnerabilities.",
 			InputHint:   "optional target or focus",
 		},
+		{
+			Name:        "compact",
+			Description: "Ask Claude Code to compact the current conversation context.",
+			InputHint:   "optional focus to preserve",
+		},
+		{
+			Name:        "debug",
+			Description: "Ask Claude Code to debug a failure or unexpected behavior.",
+			InputHint:   "symptom, error, or target",
+		},
+		{
+			Name:        "run",
+			Description: "Ask Claude Code to run the app and inspect the result.",
+			InputHint:   "optional launch target",
+		},
+		{
+			Name:        "verify",
+			Description: "Ask Claude Code to verify that the current change works.",
+			InputHint:   "optional verification focus",
+		},
 	}
 }
 

@@ -292,11 +292,15 @@ func TestCommandBridgeRunsClaudePrintWithConfigOptions(t *testing.T) {
 	}
 	commands := decodeAppUpdate(t, responses[0])
 	if commands.Update.SessionUpdate != "available_commands_update" ||
-		len(commands.Update.AvailableCommands) != 4 ||
+		len(commands.Update.AvailableCommands) != 8 ||
 		commands.Update.AvailableCommands[0].Name != "init" ||
 		commands.Update.AvailableCommands[1].Name != "review" ||
 		commands.Update.AvailableCommands[2].Name != "code-review" ||
-		commands.Update.AvailableCommands[3].Name != "security-review" {
+		commands.Update.AvailableCommands[3].Name != "security-review" ||
+		commands.Update.AvailableCommands[4].Name != "compact" ||
+		commands.Update.AvailableCommands[5].Name != "debug" ||
+		commands.Update.AvailableCommands[6].Name != "run" ||
+		commands.Update.AvailableCommands[7].Name != "verify" {
 		t.Fatalf("available commands = %#v, want Claude command set", commands)
 	}
 	var created struct {

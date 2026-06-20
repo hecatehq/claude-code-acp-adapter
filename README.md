@@ -48,8 +48,9 @@ Implemented:
 - command-backed `session/list` metadata, `config_option_update`
   notifications for config changes, and `session_info_update` notifications
   when transcript metadata changes
-- command-backed `/init`, `/review`, `/code-review`, and `/security-review`
-  advertisement through the normal `claude --print` prompt path
+- command-backed `/init`, `/review`, `/code-review`, `/security-review`,
+  `/compact`, `/debug`, `/run`, and `/verify` advertisement through the normal
+  `claude --print` prompt path
 - command-backed ACP stdio/HTTP MCP server config propagation into Claude
   `--mcp-config` with `--strict-mcp-config`
 - Claude `--output-format stream-json` translation into ACP assistant text,
@@ -132,10 +133,10 @@ native session id. Config changes return the current config option list and
 publish `config_option_update` notifications. Completed command-backed prompts
 publish `session_info_update` notifications with the in-memory title and
 updated timestamp when transcript metadata changes.
-The adapter advertises `/init`, `/review`, `/code-review`, and
-`/security-review` as ACP available commands and passes them through the normal
-`claude --print` prompt path. Other Claude Code commands remain unadvertised
-until their non-interactive behavior is explicitly tested.
+The adapter advertises `/init`, `/review`, `/code-review`, `/security-review`,
+`/compact`, `/debug`, `/run`, and `/verify` as ACP available commands and passes
+them through the normal `claude --print` prompt path. Other Claude Code commands
+remain unadvertised until their non-interactive behavior is explicitly tested.
 
 The root ACP server can also launch an explicit subprocess-backed ACP runtime
 with `--runtime-binary`, `--runtime-workdir`, and repeated `--runtime-arg`

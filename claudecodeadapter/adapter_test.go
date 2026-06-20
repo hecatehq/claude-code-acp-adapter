@@ -127,12 +127,16 @@ func TestNewServerPublishesAvailableCommands(t *testing.T) {
 	}
 	update := decodeSessionUpdate(t, responses[0])
 	if update.Update.SessionUpdate != "available_commands_update" ||
-		len(update.Update.AvailableCommands) != 4 ||
+		len(update.Update.AvailableCommands) != 8 ||
 		update.Update.AvailableCommands[0].Name != "init" ||
 		update.Update.AvailableCommands[0].Input.Unstructured.Hint != "optional instruction focus" ||
 		update.Update.AvailableCommands[1].Name != "review" ||
 		update.Update.AvailableCommands[2].Name != "code-review" ||
-		update.Update.AvailableCommands[3].Name != "security-review" {
+		update.Update.AvailableCommands[3].Name != "security-review" ||
+		update.Update.AvailableCommands[4].Name != "compact" ||
+		update.Update.AvailableCommands[5].Name != "debug" ||
+		update.Update.AvailableCommands[6].Name != "run" ||
+		update.Update.AvailableCommands[7].Name != "verify" {
 		t.Fatalf("available commands = %#v, want Claude command set", update)
 	}
 }
@@ -149,14 +153,18 @@ func TestNewCLISpecExposesLibraryContract(t *testing.T) {
 		spec.Command.NewID == nil ||
 		!spec.Command.LoadUnknownSessions ||
 		len(spec.Command.Options) != 3 ||
-		len(spec.Command.Commands) != 4 ||
+		len(spec.Command.Commands) != 8 ||
 		!spec.Command.IncludeTranscript {
 		t.Fatalf("command spec = %#v, want command-backed bridge with config options and commands", spec.Command)
 	}
 	if spec.Command.Commands[0].Name != "init" || spec.Command.Commands[0].InputHint == "" ||
 		spec.Command.Commands[1].Name != "review" ||
 		spec.Command.Commands[2].Name != "code-review" ||
-		spec.Command.Commands[3].Name != "security-review" {
+		spec.Command.Commands[3].Name != "security-review" ||
+		spec.Command.Commands[4].Name != "compact" ||
+		spec.Command.Commands[5].Name != "debug" ||
+		spec.Command.Commands[6].Name != "run" ||
+		spec.Command.Commands[7].Name != "verify" {
 		t.Fatalf("commands = %#v, want Claude command set with input hints", spec.Command.Commands)
 	}
 	if id := spec.Command.NewID(); !uuidPattern.MatchString(id) {

@@ -130,13 +130,14 @@ tool/permission/elicitation parity.
   `claude --print --output-format stream-json --session-id` argv construction,
   Claude UUID session creation, host-known session id adoption on
   `session/load`, `/init`/`/review`/`/code-review`/`/security-review`
-  advertisement through the normal `claude --print` prompt path, additional
-  workspace directories, ACP stdio/HTTP MCP server config propagation into
-  Claude `--mcp-config`, streamed JSONL parsing into ACP assistant text,
-  thinking, tool-call, and usage updates, Claude tool kind classification for
-  shell/file/web/task/memory/todo/plan tools, generic command `tool_call`
-  activity for the outer Claude process, in-memory fork capability, bounded
-  transcript replay for later command prompts, and prompt completion
+  `/compact`/`/debug`/`/run`/`/verify` advertisement through the normal
+  `claude --print` prompt path, additional workspace directories, ACP stdio/HTTP
+  MCP server config propagation into Claude `--mcp-config`, streamed JSONL
+  parsing into ACP assistant text, thinking, tool-call, and usage updates,
+  Claude tool kind classification for shell/file/web/task/memory/todo/plan
+  tools, generic command `tool_call` activity for the outer Claude process,
+  in-memory fork capability, bounded transcript replay for later command
+  prompts, and prompt completion
 - Coder ACP SDK compatibility guardrails for the adopted protocol primitives:
   JSON-RPC error shape, default initialize protocol version, and selected
   runtime ACP request JSON shapes
