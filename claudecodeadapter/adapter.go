@@ -83,6 +83,7 @@ func CommandSpec() *commandbridge.Spec {
 		BuildPrompt:         PromptCommand,
 		BuildAuthenticate:   AuthenticateCommand,
 		BuildLogout:         LogoutCommand,
+		AuthRequired:        CommandAuthRequired,
 		NewStreamParser:     NewStreamParser,
 	}
 }
@@ -255,6 +256,36 @@ func AuthenticateCommand(methodID string) (adapterprocess.Spec, error) {
 		Args:    []string{"/login"},
 		Dir:     dir,
 	}, nil
+}
+
+func CommandAuthRequired(result adapterprocess.Result, err error) bool {
+	if err == nil {
+		return false
+	}
+	text := strings.ToLower(strings.Join([]string{
+		err.Error(),
+		string(result.Stderr),
+		string(result.Stdout),
+	}, "\n"))
+	for _, marker := range []string{
+		"authentication required",
+		"auth required",
+		"not authenticated",
+		"not signed in",
+		"not logged in",
+		"please log in",
+		"please login",
+		"run claude /login",
+		"claude /login",
+		"anthropic_api_key",
+		"anthropic_auth_token",
+		"api key",
+	} {
+		if strings.Contains(text, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func newClaudeSessionID() string {
