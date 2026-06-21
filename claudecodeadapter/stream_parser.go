@@ -78,13 +78,51 @@ func mapClaudeUserMessage(message map[string]any) commandbridge.JSONLMapping {
 		if id == "" {
 			continue
 		}
-		status := "completed"
-		if boolValue(block["is_error"]) {
-			status = "failed"
-		}
-		out = append(out, commandbridge.ToolCallFinish(id, "", "", status, claudeToolResultRawOutput(block)))
+		out = append(out, commandbridge.ToolCallFinish(id, "", "", claudeToolResultStatus(block), claudeToolResultRawOutput(block)))
 	}
 	return commandbridge.JSONLMapping{Events: out}
+}
+
+func claudeToolResultStatus(block map[string]any) string {
+	if boolValue(block["is_error"]) || boolValue(block["error"]) {
+		return "failed"
+	}
+	status := strings.ToLower(firstString(block, "status", "state", "outcome", "result_status", "resultStatus"))
+	if claudeToolStatusFailed(status) {
+		return "failed"
+	}
+	if code := firstInt(block, "exit_code", "exitCode"); code != 0 {
+		return "failed"
+	}
+	if content := mapValue(block["content"]); len(content) > 0 {
+		if status := strings.ToLower(firstString(content, "status", "state", "outcome", "result_status", "resultStatus")); claudeToolStatusFailed(status) {
+			return "failed"
+		}
+		if code := firstInt(content, "exit_code", "exitCode"); code != 0 {
+			return "failed"
+		}
+	}
+	return "completed"
+}
+
+func claudeToolStatusFailed(status string) bool {
+	switch {
+	case status == "":
+		return false
+	case strings.Contains(status, "fail"),
+		strings.Contains(status, "error"),
+		strings.Contains(status, "cancel"),
+		strings.Contains(status, "reject"),
+		strings.Contains(status, "deni"),
+		strings.Contains(status, "block"),
+		strings.Contains(status, "timeout"),
+		strings.Contains(status, "timed_out"),
+		strings.Contains(status, "interrupt"),
+		strings.Contains(status, "abort"):
+		return true
+	default:
+		return false
+	}
 }
 
 func claudeToolResultRawOutput(block map[string]any) any {
