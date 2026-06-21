@@ -1167,6 +1167,48 @@ func TestClaudeStreamParserPreservesStructuredToolOutput(t *testing.T) {
 	}
 }
 
+func TestClaudeStreamParserMarksProviderRejectedToolsFailed(t *testing.T) {
+	tests := []struct {
+		name  string
+		block string
+	}{
+		{
+			name:  "denied",
+			block: `{"type":"tool_result","tool_use_id":"tool-1","content":"permission denied","status":"denied"}`,
+		},
+		{
+			name:  "rejected",
+			block: `{"type":"tool_result","tool_use_id":"tool-1","content":"operator rejected","state":"rejected"}`,
+		},
+		{
+			name:  "blocked in nested content",
+			block: `{"type":"tool_result","tool_use_id":"tool-1","content":{"status":"blocked_by_policy","stderr":"blocked"}}`,
+		},
+		{
+			name:  "nonzero nested exit code",
+			block: `{"type":"tool_result","tool_use_id":"tool-1","content":{"stdout":"ok\n","stderr":"warn\n","exit_code":2}}`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parser := claudecodeadapter.NewStreamParser(commandbridge.Session{}, runtimeacp.PromptParams{})
+
+			events, err := parser.Parse([]byte(`{"type":"user","message":{"content":[` + tt.block + `]}}` + "\n"))
+			if err != nil {
+				t.Fatalf("Parse returned error: %v", err)
+			}
+			if len(events) != 1 {
+				t.Fatalf("events len = %d, want one tool finish: %#v", len(events), events)
+			}
+			if events[0].Update["sessionUpdate"] != "tool_call_update" ||
+				events[0].Update["toolCallId"] != "tool-1" ||
+				events[0].Update["status"] != "failed" {
+				t.Fatalf("tool finish = %#v, want failed tool finish", events[0].Update)
+			}
+		})
+	}
+}
+
 func TestClaudeStreamParserClassifiesProviderTools(t *testing.T) {
 	parser := claudecodeadapter.NewStreamParser(commandbridge.Session{}, runtimeacp.PromptParams{})
 	events, err := parser.Parse([]byte(`{"type":"assistant","message":{"content":[{"type":"tool_use","id":"web-1","name":"WebSearch","input":{"query":"acp"}},{"type":"tool_use","id":"task-1","name":"TaskCreate","input":{"description":"review"}},{"type":"tool_use","id":"memory-1","name":"MemoryRecall","input":{"query":"project"}},{"type":"tool_use","id":"todo-1","name":"TodoWrite","input":{"todos":[]}},{"type":"tool_use","id":"plan-1","name":"ExitPlanMode","input":{"plan":"ship"}},{"type":"tool_use","id":"mcp-1","name":"mcp__docs__search","input":{"query":"acp"}}]}}` + "\n"))

@@ -137,8 +137,9 @@ production-grade.
   MCP server config propagation into Claude `--mcp-config`, streamed JSONL
   parsing into ACP assistant text, thinking, tool-call, usage, and terminal
   stop-reason updates, Claude tool kind classification for
-  shell/file/web/task/memory/todo/plan tools, generic command `tool_call`
-  activity for the outer Claude process,
+  shell/file/web/task/memory/todo/plan tools, failed status mapping for
+  rejected/denied/blocked or non-zero-exit provider tool results, generic
+  command `tool_call` activity for the outer Claude process,
   in-memory fork capability, bounded transcript replay for later command
   prompts, and prompt completion
 - source-shaped Claude stream fixtures for permission requests, including
@@ -180,8 +181,8 @@ Claude-native parity:
 - settings resolution, settings trust filtering, and settings reloads
 - model allowlists, model alias discovery, and permission-mode availability by
   model beyond the initial static command-backed selectors
-- provider-native permission response edge cases beyond parsed request mapping
-  and the selected Claude Code permission mode
+- provider-native permission response edge cases beyond parsed request/result
+  status mapping and the selected Claude Code permission mode
 - AskUserQuestion and MCP elicitation forms
 - deeper shell, file, edit, grep, glob, web, TODO, task, plan, memory, and
   terminal-output tool mappings beyond kind classification
