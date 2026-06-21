@@ -87,6 +87,46 @@ func TestNewServerCreatesUUIDSessionID(t *testing.T) {
 	}
 }
 
+func TestNewServerCloseSessionFreesCommandBridgeState(t *testing.T) {
+	client := acptest.NewClient(t, claudecodeadapter.NewServer("test"))
+	responses := client.Send(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "session/new",
+		"params":  map[string]any{"cwd": t.TempDir()},
+	})
+	if len(responses) != 2 {
+		t.Fatalf("responses = %#v, want available command update + session response", responses)
+	}
+	var created struct {
+		SessionID string `json:"sessionId"`
+	}
+	responses[1].ResultInto(t, &created)
+
+	closeResp := client.Request("session/close", map[string]any{"sessionId": created.SessionID})
+	var closeResult map[string]any
+	closeResp.ResultInto(t, &closeResult)
+
+	listResp := client.Request("session/list", map[string]any{})
+	var list struct {
+		Sessions []struct {
+			SessionID string `json:"sessionId"`
+		} `json:"sessions"`
+	}
+	listResp.ResultInto(t, &list)
+	if len(list.Sessions) != 0 {
+		t.Fatalf("sessions after close = %#v, want closed session removed", list.Sessions)
+	}
+
+	promptResp := client.Request("session/prompt", map[string]any{
+		"sessionId": created.SessionID,
+		"prompt":    []map[string]any{{"type": "text", "text": "after close"}},
+	})
+	if promptResp.Error == nil || promptResp.Error.Code != -32001 || promptResp.Error.Message != "session not found" {
+		t.Fatalf("prompt after close error = %#v, want session not found", promptResp.Error)
+	}
+}
+
 func TestNewServerLoadsKnownClaudeSessionIDAfterRestart(t *testing.T) {
 	client := acptest.NewClient(t, claudecodeadapter.NewServer("test"))
 

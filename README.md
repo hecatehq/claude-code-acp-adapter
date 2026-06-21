@@ -134,8 +134,9 @@ prompts and host-known sessions adopted through `session/load` or
 replay remain in-memory conveniences while the adapter process is alive.
 `session/list` returns the adapter's currently loaded session metadata, and
 later prompts receive a bounded transcript prelude so command-backed turns keep
-conversational context while still using Claude's native session id. Config
-changes return the current config option list and publish
+conversational context while still using Claude's native session id.
+`session/close` cancels active work and frees the adapter's in-memory session
+state. Config changes return the current config option list and publish
 `config_option_update` notifications. Completed command-backed prompts publish
 `session_info_update` notifications with the in-memory title and updated
 timestamp when transcript metadata changes.
