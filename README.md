@@ -18,7 +18,8 @@ and production release hardening.
   adapter: sessions, settings, auth, model/config options, permission requests,
   MCP servers, elicitation, tool updates, terminal output, cancellation, and
   resume/load behavior.
-- Ship deterministic, signed Go release binaries.
+- Ship deterministic, checksum-verified, provenance-attested Go release
+  binaries.
 
 ## Current Status
 
@@ -59,7 +60,8 @@ Implemented:
   command `tool_call` activity for the native Claude process
 - ACP `authenticate` mapped to the native `claude /login` command
 - ACP `logout` mapped to the native `claude auth logout` command
-- CI and tag-driven release packaging for unsigned alpha binaries
+- CI and tag-driven release packaging for checksum-verified,
+  provenance-attested alpha binaries
 
 Not implemented yet:
 
@@ -71,7 +73,7 @@ Not implemented yet:
 - deeper Claude-native slash-command semantics beyond the adapter-owned command
   set
 - runtime config/auth/model discovery and orphan-result handling
-- production signing/provenance for release artifacts
+- deeper stable-release parity gates in `docs/STABLE_READINESS.md`
 
 ## Development
 
@@ -102,6 +104,8 @@ go run ./cmd/claude-code-acp-adapter doctor
 See [docs/TESTING.md](docs/TESTING.md) for what is covered today and what still
 needs production-grade/deeper Claude-native parity coverage.
 See [docs/RELEASE.md](docs/RELEASE.md) for the tag-driven release flow.
+See [docs/STABLE_READINESS.md](docs/STABLE_READINESS.md) for the gate before a
+stable adapter tag.
 
 ## CLI Contract
 

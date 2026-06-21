@@ -89,7 +89,9 @@
 
 ## Phase 4: Release and Hecate Integration
 
-- signed/provenance-backed release hardening
+- checksum-backed release archives with GitHub artifact attestations from the
+  tag workflow
+- keep `docs/STABLE_READINESS.md` current until the stable gate is green
 - keep Hecate registry/Dockerfile pins pointed at the released
   `claude-code-acp-adapter` binary, and run Hecate's ACP adapter release smoke
   after every adapter release bump
