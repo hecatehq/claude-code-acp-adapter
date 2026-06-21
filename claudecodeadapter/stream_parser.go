@@ -179,6 +179,12 @@ func claudeToolKind(name string) string {
 	switch {
 	case strings.Contains(name, "bash"):
 		return "execute"
+	case strings.Contains(name, "mcp"):
+		return "mcp"
+	case strings.Contains(name, "todo"):
+		return "todo"
+	case strings.Contains(name, "plan"):
+		return "plan"
 	case strings.Contains(name, "read"):
 		return "read"
 	case strings.Contains(name, "write"), strings.Contains(name, "edit"), strings.Contains(name, "patch"):
@@ -191,7 +197,7 @@ func claudeToolKind(name string) string {
 		return "task"
 	case strings.Contains(name, "memory"):
 		return "memory"
-	case strings.Contains(name, "todo"), strings.Contains(name, "plan"), strings.Contains(name, "think"):
+	case strings.Contains(name, "think"):
 		return "think"
 	default:
 		return "other"
