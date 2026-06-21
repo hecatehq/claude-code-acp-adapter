@@ -141,8 +141,9 @@ production-grade.
   activity for the outer Claude process,
   in-memory fork capability, bounded transcript replay for later command
   prompts, and prompt completion
-- source-shaped Claude stream fixtures for permission requests, thinking/text
-  content, tool lifecycle updates, usage, and terminal stop reasons
+- source-shaped Claude stream fixtures for permission requests, including
+  option alias/default handling, thinking/text content, tool lifecycle updates,
+  usage, and terminal stop reasons
 - opt-in real Claude Code CLI smoke coverage that requires an authenticated
   local `claude` binary and proves a real prompt completes through the ACP
   command bridge

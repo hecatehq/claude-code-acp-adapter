@@ -962,6 +962,90 @@ func TestClaudeStreamParserMapsPermissionRequest(t *testing.T) {
 	}
 }
 
+func TestClaudeStreamParserMapsPermissionRequestAliases(t *testing.T) {
+	tests := []struct {
+		name       string
+		line       string
+		wantID     string
+		wantTitle  string
+		wantKind   string
+		wantRawKey string
+		wantRawVal string
+		wantOpts   []commandbridge.PermissionOption
+	}{
+		{
+			name:       "snake case tool call and permission options",
+			line:       `{"type":"approval_requested","tool_call":{"tool_call_id":"mcp-1","tool_name":"MCP Search","arguments":{"query":"permissions"}},"permission_options":[{"option_id":"allow-session","name":"Allow for session","kind":"allow_always"},{"option_id":"deny-once","name":"Deny once","kind":"reject_once"}]}`,
+			wantID:     "mcp-1",
+			wantTitle:  "MCP Search",
+			wantKind:   "mcp",
+			wantRawKey: "query",
+			wantRawVal: "permissions",
+			wantOpts: []commandbridge.PermissionOption{
+				{OptionID: "allow-session", Name: "Allow for session", Kind: "allow_always"},
+				{OptionID: "deny-once", Name: "Deny once", Kind: "reject_once"},
+			},
+		},
+		{
+			name:       "tool use shape and choices options",
+			line:       `{"type":"can_use_tool","tool_use":{"id":"bash-1","name":"Bash","input":{"command":"make test"}},"choices":[{"value":"allow-once","title":"Allow once","type":"allow_once"},{"value":"reject-once","title":"Reject","type":"reject_once"}]}`,
+			wantID:     "bash-1",
+			wantTitle:  "Bash",
+			wantKind:   "execute",
+			wantRawKey: "command",
+			wantRawVal: "make test",
+			wantOpts: []commandbridge.PermissionOption{
+				{OptionID: "allow-once", Name: "Allow once", Kind: "allow_once"},
+				{OptionID: "reject-once", Name: "Reject", Kind: "reject_once"},
+			},
+		},
+		{
+			name:       "defaults permission options when missing",
+			line:       `{"type":"permission_request","tool":{"id":"read-1","name":"Read","input":{"path":"README.md"}}}`,
+			wantID:     "read-1",
+			wantTitle:  "Read",
+			wantKind:   "read",
+			wantRawKey: "path",
+			wantRawVal: "README.md",
+			wantOpts: []commandbridge.PermissionOption{
+				{OptionID: "allow_once", Name: "Allow once", Kind: "allow_once"},
+				{OptionID: "reject_once", Name: "Reject", Kind: "reject_once"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parser := claudecodeadapter.NewStreamParser(commandbridge.Session{}, runtimeacp.PromptParams{})
+			events, err := parser.Parse([]byte(tt.line + "\n"))
+			if err != nil {
+				t.Fatalf("Parse returned error: %v", err)
+			}
+			if len(events) != 1 || events[0].PermissionRequest == nil {
+				t.Fatalf("events = %#v, want one permission request", events)
+			}
+			req := events[0].PermissionRequest
+			if req.ToolCallID != tt.wantID ||
+				req.Title != tt.wantTitle ||
+				req.Kind != tt.wantKind {
+				t.Fatalf("permission request = %#v, want id/title/kind %q/%q/%q", req, tt.wantID, tt.wantTitle, tt.wantKind)
+			}
+			rawInput, _ := req.RawInput.(map[string]any)
+			if rawInput[tt.wantRawKey] != tt.wantRawVal {
+				t.Fatalf("raw input = %#v, want %s=%q", rawInput, tt.wantRawKey, tt.wantRawVal)
+			}
+			if len(req.Options) != len(tt.wantOpts) {
+				t.Fatalf("options = %#v, want %#v", req.Options, tt.wantOpts)
+			}
+			for i := range tt.wantOpts {
+				if req.Options[i] != tt.wantOpts[i] {
+					t.Fatalf("option %d = %#v, want %#v", i, req.Options[i], tt.wantOpts[i])
+				}
+			}
+		})
+	}
+}
+
 func TestClaudeStreamParserMapsTerminalStopReason(t *testing.T) {
 	parser := claudecodeadapter.NewStreamParser(commandbridge.Session{}, runtimeacp.PromptParams{})
 
