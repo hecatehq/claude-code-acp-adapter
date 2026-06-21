@@ -136,10 +136,13 @@ func isClaudePermissionRequest(eventType string, event map[string]any) bool {
 func mapClaudePermissionRequest(event map[string]any) commandbridge.JSONLMapping {
 	toolCall := claudePermissionToolCall(event)
 	id := firstString(toolCall, "tool_use_id", "toolUseId", "tool_call_id", "toolCallId", "id")
-	title := firstString(toolCall, "title", "name", "tool_name", "toolName")
+	title := claudePermissionToolTitle(toolCall)
 	kind := firstString(toolCall, "kind")
 	if kind == "" {
-		kind = claudeToolKind(title)
+		kind = claudeToolKind(firstString(toolCall, "type", "tool_type", "toolType"))
+		if kind == "other" {
+			kind = claudeToolKind(title)
+		}
 	}
 	rawInput := firstValue(toolCall, "rawInput", "raw_input", "input", "arguments")
 	if rawInput == nil {
@@ -157,6 +160,22 @@ func claudePermissionToolCall(event map[string]any) map[string]any {
 		}
 	}
 	return event
+}
+
+func claudePermissionToolTitle(toolCall map[string]any) string {
+	explicitServer := firstString(toolCall, "server", "server_name", "serverName")
+	if explicitServer == "" && !strings.Contains(strings.ToLower(firstString(toolCall, "type", "tool_type", "toolType")), "mcp") {
+		return firstString(toolCall, "title", "name", "tool_name", "toolName")
+	}
+	server := explicitServer
+	if server == "" {
+		server = firstString(toolCall, "namespace")
+	}
+	tool := firstString(toolCall, "tool", "tool_name", "toolName")
+	if server != "" && tool != "" {
+		return server + "/" + tool
+	}
+	return firstString(toolCall, "title", "name", "tool_name", "toolName")
 }
 
 func claudePermissionOptions(event map[string]any) []commandbridge.PermissionOption {
