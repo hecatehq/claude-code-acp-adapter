@@ -82,9 +82,39 @@ func mapClaudeUserMessage(message map[string]any) commandbridge.JSONLMapping {
 		if boolValue(block["is_error"]) {
 			status = "failed"
 		}
-		out = append(out, commandbridge.ToolCallFinish(id, "", "", status, textValue(block["content"])))
+		out = append(out, commandbridge.ToolCallFinish(id, "", "", status, claudeToolResultRawOutput(block)))
 	}
 	return commandbridge.JSONLMapping{Events: out}
+}
+
+func claudeToolResultRawOutput(block map[string]any) any {
+	if output := claudeStructuredToolOutput(block); len(output) > 0 {
+		return output
+	}
+	content := block["content"]
+	if output := claudeStructuredToolOutput(mapValue(content)); len(output) > 0 {
+		return output
+	}
+	if text := textValue(content); text != "" {
+		return text
+	}
+	return firstValue(block, "rawOutput", "raw_output", "result")
+}
+
+func claudeStructuredToolOutput(values map[string]any) map[string]any {
+	if len(values) == 0 {
+		return nil
+	}
+	out := map[string]any{}
+	for _, key := range []string{"stdout", "stderr", "exit_code", "exitCode"} {
+		if value, ok := values[key]; ok {
+			out[key] = value
+		}
+	}
+	if len(out) < 2 {
+		return nil
+	}
+	return out
 }
 
 func isClaudePermissionRequest(eventType string, event map[string]any) bool {
