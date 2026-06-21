@@ -136,10 +136,11 @@ replay remain in-memory conveniences while the adapter process is alive.
 later prompts receive a bounded transcript prelude so command-backed turns keep
 conversational context while still using Claude's native session id.
 `session/close` cancels active work and frees the adapter's in-memory session
-state. Config changes return the current config option list and publish
-`config_option_update` notifications. Completed command-backed prompts publish
-`session_info_update` notifications with the in-memory title and updated
-timestamp when transcript metadata changes.
+state; `session/delete` is the destructive cleanup path hosts should use when
+deleting the owning chat/session. Config changes return the current config
+option list and publish `config_option_update` notifications. Completed
+command-backed prompts publish `session_info_update` notifications with the
+in-memory title and updated timestamp when transcript metadata changes.
 The adapter advertises `/init`, `/review`, `/code-review`, `/security-review`,
 `/compact`, `/debug`, `/run`, and `/verify` as ACP available commands and passes
 them through the normal `claude --print` prompt path. Other Claude Code commands
