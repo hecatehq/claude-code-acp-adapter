@@ -147,8 +147,9 @@ production-grade.
   thinking/text content, tool lifecycle updates, usage, and terminal stop
   reasons
 - opt-in real Claude Code CLI smoke coverage that requires an authenticated
-  local `claude` binary and proves a real prompt completes through the ACP
-  command bridge
+  local `claude` binary and proves session list/load, a real prompt completion,
+  a real tool/file update flow with permission auto-approval, and cancellation
+  with no double-settle through the ACP command bridge
 - shared adapter conformance checks for the Hecate-facing ACP initialize
   contract, advertised auth/logout capabilities, session config selectors, and
   available slash-command names
@@ -174,8 +175,7 @@ Claude-native parity:
   semantics beyond Claude `--session-id`
 - Claude-specific session fork persistence/history semantics beyond in-memory
   command-backed state
-- real vendor-runtime normal cancellation, wedged-runtime forced cancellation, and no
-  double-settle behavior
+- wedged-runtime forced cancellation behavior
 - terminal auth behavior in local/remote environments
 - gateway auth metadata
 - settings resolution, settings trust filtering, and settings reloads
@@ -230,6 +230,9 @@ make real-cli-smoke
 ```
 
 The target sets `ACP_ADAPTER_REAL_CLI_SMOKE=1` and runs the `real_cli`
-build-tag test. It creates a temporary workspace, opens an ACP session, sends
-one minimal prompt through the native `claude` command bridge, and asserts that
-the prompt finishes with parsed assistant output.
+build-tag test. It creates temporary workspaces, opens ACP sessions, verifies
+list/load, sends one minimal prompt through the native `claude` command bridge,
+temporarily sets `permission_mode=bypassPermissions` for the tool/cancel
+sessions, runs a tool/file update prompt with permission requests auto-approved
+by the test client, and cancels one long-running prompt to assert a single
+cancelled prompt settlement.
