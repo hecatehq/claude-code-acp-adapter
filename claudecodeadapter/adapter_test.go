@@ -1048,17 +1048,20 @@ func TestClaudeStreamParserMapsSourceShapedFixtures(t *testing.T) {
 
 func TestClaudeStreamParserClassifiesProviderTools(t *testing.T) {
 	parser := claudecodeadapter.NewStreamParser(commandbridge.Session{}, runtimeacp.PromptParams{})
-	events, err := parser.Parse([]byte(`{"type":"assistant","message":{"content":[{"type":"tool_use","id":"web-1","name":"WebSearch","input":{"query":"acp"}},{"type":"tool_use","id":"task-1","name":"TaskCreate","input":{"description":"review"}},{"type":"tool_use","id":"memory-1","name":"MemoryRecall","input":{"query":"project"}}]}}` + "\n"))
+	events, err := parser.Parse([]byte(`{"type":"assistant","message":{"content":[{"type":"tool_use","id":"web-1","name":"WebSearch","input":{"query":"acp"}},{"type":"tool_use","id":"task-1","name":"TaskCreate","input":{"description":"review"}},{"type":"tool_use","id":"memory-1","name":"MemoryRecall","input":{"query":"project"}},{"type":"tool_use","id":"todo-1","name":"TodoWrite","input":{"todos":[]}},{"type":"tool_use","id":"plan-1","name":"ExitPlanMode","input":{"plan":"ship"}},{"type":"tool_use","id":"mcp-1","name":"mcp__docs__search","input":{"query":"acp"}}]}}` + "\n"))
 	if err != nil {
 		t.Fatalf("Parse returned error: %v", err)
 	}
-	if len(events) != 3 {
-		t.Fatalf("events len = %d, want 3: %#v", len(events), events)
+	if len(events) != 6 {
+		t.Fatalf("events len = %d, want 6: %#v", len(events), events)
 	}
 	wants := map[string]string{
 		"web-1":    "fetch",
 		"task-1":   "task",
 		"memory-1": "memory",
+		"todo-1":   "todo",
+		"plan-1":   "plan",
+		"mcp-1":    "mcp",
 	}
 	for _, event := range events {
 		id, _ := event.Update["toolCallId"].(string)
