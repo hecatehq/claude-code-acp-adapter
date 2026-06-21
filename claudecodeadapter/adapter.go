@@ -55,11 +55,16 @@ func Info(version string) acp.AdapterInfo {
 		Title:   Title,
 		Version: version,
 		Capabilities: acp.Capabilities{
-			Images:          true,
-			EmbeddedContext: true,
-			MCPHTTP:         true,
-			MCPSSE:          true,
-			LoadSession:     true,
+			Images:                true,
+			EmbeddedContext:       true,
+			MCPHTTP:               true,
+			MCPSSE:                true,
+			LoadSession:           true,
+			SessionList:           true,
+			SessionResume:         true,
+			SessionClose:          true,
+			SessionDelete:         true,
+			AdditionalDirectories: true,
 		},
 	}
 }
