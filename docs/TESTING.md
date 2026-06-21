@@ -190,7 +190,7 @@ Claude-native parity:
 - query-closed errors for prompts/cancels after stream termination
 - local slash-command metadata stripping beyond the adapter-owned command set
 - vendor MCP connection lifecycle semantics and MCP tool approval elicitations
-- production release signing/provenance
+- unresolved stable-release parity gates listed in `docs/STABLE_READINESS.md`
 
 ## Test Strategy
 
