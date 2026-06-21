@@ -27,8 +27,17 @@ func TestInfoPinsClaudeCapabilities(t *testing.T) {
 	if info.Name != claudecodeadapter.Name || info.Title != claudecodeadapter.Title || info.Version != "1.2.3" {
 		t.Fatalf("info = %#v, want Claude Code adapter metadata", info)
 	}
-	if !info.Capabilities.Images || !info.Capabilities.EmbeddedContext || !info.Capabilities.MCPHTTP || !info.Capabilities.MCPSSE || !info.Capabilities.LoadSession {
-		t.Fatalf("capabilities = %#v, want image + embedded context + MCP HTTP/SSE + load session", info.Capabilities)
+	if !info.Capabilities.Images ||
+		!info.Capabilities.EmbeddedContext ||
+		!info.Capabilities.MCPHTTP ||
+		!info.Capabilities.MCPSSE ||
+		!info.Capabilities.LoadSession ||
+		!info.Capabilities.SessionList ||
+		!info.Capabilities.SessionResume ||
+		!info.Capabilities.SessionClose ||
+		!info.Capabilities.SessionDelete ||
+		!info.Capabilities.AdditionalDirectories {
+		t.Fatalf("capabilities = %#v, want Claude Code stable ACP surface", info.Capabilities)
 	}
 	if claudecodeadapter.NewServer("1.2.3") == nil {
 		t.Fatal("NewServer returned nil")
@@ -40,16 +49,21 @@ func TestInfoPinsClaudeCapabilities(t *testing.T) {
 
 func TestInitializeAdvertisesLoadSession(t *testing.T) {
 	adaptertest.AssertInitializeContract(t, claudecodeadapter.NewServer("test"), adaptertest.InitializeContract{
-		Name:            claudecodeadapter.Name,
-		Title:           claudecodeadapter.Title,
-		Version:         "test",
-		Images:          true,
-		EmbeddedContext: true,
-		MCPHTTP:         true,
-		MCPSSE:          true,
-		LoadSession:     true,
-		Logout:          true,
-		AuthMethodIDs:   []string{"agent-login"},
+		Name:                  claudecodeadapter.Name,
+		Title:                 claudecodeadapter.Title,
+		Version:               "test",
+		Images:                true,
+		EmbeddedContext:       true,
+		MCPHTTP:               true,
+		MCPSSE:                true,
+		LoadSession:           true,
+		SessionList:           true,
+		SessionResume:         true,
+		SessionClose:          true,
+		SessionDelete:         true,
+		AdditionalDirectories: true,
+		Logout:                true,
+		AuthMethodIDs:         []string{"agent-login"},
 	})
 }
 
