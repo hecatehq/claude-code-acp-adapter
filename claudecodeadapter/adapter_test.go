@@ -987,6 +987,19 @@ func TestClaudeStreamParserMapsPermissionRequestAliases(t *testing.T) {
 			},
 		},
 		{
+			name:       "mcp tool call fields",
+			line:       `{"type":"permission_request","tool_call":{"tool_call_id":"mcp-2","type":"mcp_tool_call","server":"docs","tool":"search","arguments":{"query":"acp"}}}`,
+			wantID:     "mcp-2",
+			wantTitle:  "docs/search",
+			wantKind:   "mcp",
+			wantRawKey: "query",
+			wantRawVal: "acp",
+			wantOpts: []commandbridge.PermissionOption{
+				{OptionID: "allow_once", Name: "Allow once", Kind: "allow_once"},
+				{OptionID: "reject_once", Name: "Reject", Kind: "reject_once"},
+			},
+		},
+		{
 			name:       "tool use shape and choices options",
 			line:       `{"type":"can_use_tool","tool_use":{"id":"bash-1","name":"Bash","input":{"command":"make test"}},"choices":[{"value":"allow-once","title":"Allow once","type":"allow_once"},{"value":"reject-once","title":"Reject","type":"reject_once"}]}`,
 			wantID:     "bash-1",
