@@ -11,16 +11,52 @@ import (
 
 func NewStreamParser(commandbridge.Session, runtimeacp.PromptParams) commandbridge.StreamParser {
 	seenAssistantText := false
+	toolMetadata := map[string]claudeToolMetadata{}
 	return commandbridge.NewJSONLStreamParser(func(event map[string]any) (commandbridge.JSONLMapping, error) {
 		mapping := mapClaudeStreamEvent(event, seenAssistantText)
 		for _, streamEvent := range mapping.Events {
 			if streamEvent.Update["sessionUpdate"] == "agent_message_chunk" {
 				seenAssistantText = true
-				break
 			}
+			trackClaudeToolMetadata(toolMetadata, streamEvent.Update)
 		}
 		return mapping, nil
 	})
+}
+
+type claudeToolMetadata struct {
+	title string
+	kind  string
+}
+
+func trackClaudeToolMetadata(known map[string]claudeToolMetadata, update map[string]any) {
+	if len(update) == 0 {
+		return
+	}
+	id := firstString(update, "toolCallId")
+	if id == "" {
+		return
+	}
+	switch firstString(update, "sessionUpdate") {
+	case "tool_call":
+		known[id] = claudeToolMetadata{
+			title: firstString(update, "title"),
+			kind:  firstString(update, "kind"),
+		}
+	case "tool_call_update":
+		if metadata, ok := known[id]; ok {
+			if firstString(update, "title") == "" && metadata.title != "" {
+				update["title"] = metadata.title
+			}
+			if firstString(update, "kind") == "" && metadata.kind != "" {
+				update["kind"] = metadata.kind
+			}
+			switch firstString(update, "status") {
+			case "completed", "failed", "cancelled":
+				delete(known, id)
+			}
+		}
+	}
 }
 
 func mapClaudeStreamEvent(event map[string]any, seenAssistantText bool) commandbridge.JSONLMapping {

@@ -134,7 +134,8 @@ production-grade.
   `session/load`, `/init`/`/review`/`/code-review`/`/security-review`
   `/compact`/`/debug`/`/run`/`/verify` advertisement through the normal
   `claude --print` prompt path, additional workspace directories, ACP stdio/HTTP
-  MCP server config propagation into Claude `--mcp-config`, streamed JSONL
+  MCP server config propagation into Claude `--mcp-config` with the required
+  option delimiter before the prompt, streamed JSONL
   parsing into ACP assistant text, thinking, tool-call, usage, and terminal
   stop-reason updates, Claude tool kind classification for
   shell/file/web/task/memory/todo/plan tools, failed status mapping for
@@ -148,8 +149,9 @@ production-grade.
   reasons
 - opt-in real Claude Code CLI smoke coverage that requires an authenticated
   local `claude` binary and proves session list/load, a real prompt completion,
-  a real tool/file update flow with permission auto-approval, and cancellation
-  with no double-settle through the ACP command bridge
+  a real tool/file update flow with permission auto-approval, a stdio MCP tool
+  call through a local echo fixture, and cancellation with no double-settle
+  through the ACP command bridge
 - shared adapter conformance checks for the Hecate-facing ACP initialize
   contract, advertised auth/logout capabilities, session config selectors, and
   available slash-command names
@@ -183,13 +185,14 @@ Claude-native parity:
   model beyond the initial static command-backed selectors
 - provider-native permission response edge cases beyond parsed request/result
   status mapping and the selected Claude Code permission mode
-- AskUserQuestion and MCP elicitation forms
+- AskUserQuestion and deeper MCP elicitation forms
 - deeper shell, file, edit, grep, glob, web, TODO, task, plan, memory, and
   terminal-output tool mappings beyond kind classification
 - orphan result skipping after cancelled queued prompts
 - query-closed errors for prompts/cancels after stream termination
 - local slash-command metadata stripping beyond the adapter-owned command set
-- vendor MCP connection lifecycle semantics and MCP tool approval elicitations
+- deeper vendor MCP connection lifecycle semantics and MCP tool approval
+  elicitations beyond the local stdio echo-tool smoke
 - unresolved stable-release parity gates listed in `docs/STABLE_READINESS.md`
 
 ## Test Strategy
@@ -232,7 +235,8 @@ make real-cli-smoke
 The target sets `ACP_ADAPTER_REAL_CLI_SMOKE=1` and runs the `real_cli`
 build-tag test. It creates temporary workspaces, opens ACP sessions, verifies
 list/load, sends one minimal prompt through the native `claude` command bridge,
-temporarily sets `permission_mode=bypassPermissions` for the tool/cancel
-sessions, runs a tool/file update prompt with permission requests auto-approved
-by the test client, and cancels one long-running prompt to assert a single
-cancelled prompt settlement.
+temporarily sets `permission_mode=bypassPermissions` for the tool, MCP, and
+cancel sessions, runs a tool/file update prompt with permission requests
+auto-approved by the test client, passes a local stdio MCP echo server through
+`mcpServers` and asserts the provider calls its `echo` tool, and cancels one
+long-running prompt to assert a single cancelled prompt settlement.

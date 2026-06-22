@@ -46,6 +46,15 @@ func TestRealClaudeCodeCLISmoke(t *testing.T) {
 		t.Fatalf("tool-created file = %q, want claude-code-acp-real-cli-tool", string(raw))
 	}
 
+	mcpDir := t.TempDir()
+	mcpRecord := filepath.Join(mcpDir, "mcp-record.txt")
+	mcpSession := newRealCLISessionWithMCP(t, client, t.TempDir(), acptest.BuildMCPStdioEchoServer(t, mcpDir), mcpRecord)
+	setRealCLIConfigOption(t, client, mcpSession.SessionID, "permission_mode", "bypassPermissions")
+	mcpResponses := client.PromptText("prompt-mcp", mcpSession.SessionID, "Use the MCP tool named echo from the MCP server named hecatesmoke exactly once with text claude-code-mcp-smoke. Then reply with one sentence starting with DONE.", 4*time.Minute)
+	assertRealCLIPromptCompleted(t, mcpResponses, "Claude Code")
+	assertRealCLIMCPFlow(t, mcpResponses, "Claude Code")
+	assertRealCLIMCPRecord(t, mcpRecord, "claude-code-mcp-smoke")
+
 	cancelSession := newRealCLISession(t, client, t.TempDir())
 	setRealCLIConfigOption(t, client, cancelSession.SessionID, "permission_mode", "bypassPermissions")
 	cancelResponses := client.PromptTextAndCancel("prompt-cancel", cancelSession.SessionID, "Run a local shell command that sleeps for 30 seconds, then reply with the word done.", 4*time.Second, 4*time.Minute)
@@ -92,7 +101,27 @@ type realCLISession struct {
 
 func newRealCLISession(t testing.TB, client *acptest.LiveClient, cwd string) realCLISession {
 	t.Helper()
-	createdResponses := client.Request(acptest.UniqueID("session-new"), "session/new", map[string]any{"cwd": cwd}, 4*time.Minute)
+	return createRealCLISession(t, client, map[string]any{"cwd": cwd})
+}
+
+func newRealCLISessionWithMCP(t testing.TB, client *acptest.LiveClient, cwd, command, recordPath string) realCLISession {
+	t.Helper()
+	return createRealCLISession(t, client, map[string]any{
+		"cwd": cwd,
+		"mcpServers": []map[string]any{{
+			"name":    "hecatesmoke",
+			"command": command,
+			"env": []map[string]string{{
+				"name":  "ACP_MCP_ECHO_RECORD_PATH",
+				"value": recordPath,
+			}},
+		}},
+	})
+}
+
+func createRealCLISession(t testing.TB, client *acptest.LiveClient, params map[string]any) realCLISession {
+	t.Helper()
+	createdResponses := client.Request(acptest.UniqueID("session-new"), "session/new", params, 4*time.Minute)
 	if len(createdResponses) < 1 {
 		t.Fatalf("session/new responses = %#v, want at least a session response", createdResponses)
 	}
@@ -103,6 +132,7 @@ func newRealCLISession(t testing.TB, client *acptest.LiveClient, cwd string) rea
 	if session.SessionID == "" {
 		t.Fatal("session id is empty")
 	}
+	cwd, _ := params["cwd"].(string)
 	return realCLISession{SessionID: session.SessionID, CWD: cwd}
 }
 
@@ -196,6 +226,45 @@ func assertRealCLIToolFlow(t testing.TB, responses []acptest.Response, provider 
 	}
 	if !sawToolStart || !sawToolFinish {
 		t.Fatalf("%s tool-flow responses did not include completed provider tool updates: start=%v finish=%v permission=%v responses=%#v", provider, sawToolStart, sawToolFinish, sawPermission, responses)
+	}
+}
+
+func assertRealCLIMCPFlow(t testing.TB, responses []acptest.Response, provider string) {
+	t.Helper()
+	var sawMCPStart, sawMCPFinish bool
+	for _, response := range responses {
+		if response.Error != nil {
+			t.Fatalf("%s MCP-flow response error: %+v", provider, *response.Error)
+		}
+		if response.Method != "session/update" {
+			continue
+		}
+		update := decodeSessionUpdate(t, response)
+		if update.Update.Kind != "mcp" {
+			continue
+		}
+		switch update.Update.SessionUpdate {
+		case "tool_call":
+			sawMCPStart = true
+		case "tool_call_update":
+			if update.Update.Status == "completed" {
+				sawMCPFinish = true
+			}
+		}
+	}
+	if !sawMCPStart || !sawMCPFinish {
+		t.Fatalf("%s MCP-flow responses did not include completed MCP tool updates: start=%v finish=%v responses=%#v", provider, sawMCPStart, sawMCPFinish, responses)
+	}
+}
+
+func assertRealCLIMCPRecord(t testing.TB, recordPath, want string) {
+	t.Helper()
+	raw, err := os.ReadFile(recordPath)
+	if err != nil {
+		t.Fatalf("read MCP record: %v", err)
+	}
+	if strings.TrimSpace(string(raw)) != want {
+		t.Fatalf("MCP record = %q, want %q", string(raw), want)
 	}
 }
 
