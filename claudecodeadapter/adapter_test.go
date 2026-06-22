@@ -553,6 +553,9 @@ func TestPromptCommandBuildsClaudePrintWithMCPServers(t *testing.T) {
 	if idx < 1 || got.Args[idx-1] != "--strict-mcp-config" {
 		t.Fatalf("args = %#v, want strict mcp config before --mcp-config", got.Args)
 	}
+	if idx+2 >= len(got.Args) || got.Args[idx+2] != "--" {
+		t.Fatalf("args = %#v, want -- delimiter after mcp config", got.Args)
+	}
 	if got.Args[len(got.Args)-1] != "hello claude" {
 		t.Fatalf("last arg = %q, want prompt", got.Args[len(got.Args)-1])
 	}
@@ -762,6 +765,7 @@ printf '{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id"
 	innerFinish := decodeSessionUpdate(t, responses[5])
 	if innerFinish.Update.SessionUpdate != "tool_call_update" ||
 		innerFinish.Update.ToolCallID != "tool-1" ||
+		innerFinish.Update.Kind != "execute" ||
 		innerFinish.Update.Status != "completed" ||
 		!strings.Contains(string(innerFinish.Update.Content), "ok") {
 		t.Fatalf("inner tool finish = %#v, want parsed Claude tool finish", innerFinish)
@@ -1245,6 +1249,27 @@ func TestClaudeStreamParserClassifiesProviderTools(t *testing.T) {
 		if got := event.Update["kind"]; got != wants[id] {
 			t.Fatalf("tool %s kind = %v, want %s", id, got, wants[id])
 		}
+	}
+}
+
+func TestClaudeStreamParserCarriesToolMetadataToResult(t *testing.T) {
+	parser := claudecodeadapter.NewStreamParser(commandbridge.Session{}, runtimeacp.PromptParams{})
+	events, err := parser.Parse([]byte(
+		`{"type":"assistant","message":{"content":[{"type":"tool_use","id":"mcp-1","name":"mcp__docs__search","input":{"query":"acp"}}]}}` + "\n" +
+			`{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"mcp-1","content":"ok"}]}}` + "\n"))
+	if err != nil {
+		t.Fatalf("Parse returned error: %v", err)
+	}
+	if len(events) != 2 {
+		t.Fatalf("events len = %d, want tool start + finish: %#v", len(events), events)
+	}
+	finish := events[1].Update
+	if finish["sessionUpdate"] != "tool_call_update" ||
+		finish["toolCallId"] != "mcp-1" ||
+		finish["title"] != "mcp__docs__search" ||
+		finish["kind"] != "mcp" ||
+		finish["status"] != "completed" {
+		t.Fatalf("tool finish = %#v, want MCP metadata carried from start", finish)
 	}
 }
 

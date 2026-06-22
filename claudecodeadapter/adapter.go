@@ -231,6 +231,9 @@ func PromptCommand(session commandbridge.Session, params runtimeacp.PromptParams
 		return adapterprocess.Spec{}, err
 	} else if ok {
 		args = append(args, "--strict-mcp-config", "--mcp-config", mcpConfig)
+		// Claude's --mcp-config accepts multiple values, so delimit options before
+		// the prompt or the prompt text is parsed as another MCP config path.
+		args = append(args, "--")
 	}
 	args = append(args, text)
 	return adapterprocess.Spec{
