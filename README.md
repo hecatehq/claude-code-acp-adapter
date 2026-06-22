@@ -2,11 +2,11 @@
 
 Neutral Go ACP adapter for Claude Code.
 
-This repository is an alpha Go ACP adapter for Claude Code. It runs as a small,
+This repository provides a Go ACP adapter for Claude Code. It runs as a small,
 auditable binary that speaks ACP over stdio. The adapter can run Claude Code
-prompts through its native command bridge. Hecate's replacement path is covered
-by release-binary smoke tests; remaining work is deeper Claude-native parity
-and production release hardening.
+prompts through its native command bridge. Hecate integration is covered by
+release-binary smoke tests; deeper Claude-native parity remains tracked as
+future work.
 
 ## Goals
 
@@ -61,7 +61,7 @@ Implemented:
 - ACP `authenticate` mapped to the native `claude /login` command
 - ACP `logout` mapped to the native `claude auth logout` command
 - CI and tag-driven release packaging for checksum-verified,
-  provenance-attested alpha binaries
+  provenance-attested binaries
 
 Not implemented yet:
 
@@ -73,7 +73,7 @@ Not implemented yet:
 - deeper Claude-native slash-command semantics beyond the adapter-owned command
   set
 - runtime config/auth/model discovery and orphan-result handling
-- deeper stable-release parity gates in `docs/STABLE_READINESS.md`
+- draft ACP RFD surfaces documented as future work in `docs/STABLE_READINESS.md`
 
 ## Development
 
