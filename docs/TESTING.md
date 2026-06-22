@@ -145,8 +145,8 @@ production-grade.
   prompts, and prompt completion
 - source-shaped Claude stream fixtures for permission requests, including
   MCP `server/tool` permission labels, option alias/default handling,
-  thinking/text content, tool lifecycle updates, usage, and terminal stop
-  reasons
+  thinking/text content, tool lifecycle updates, usage, terminal stop reasons,
+  and live ACP client coverage for rejected and cancelled permission outcomes
 - opt-in real Claude Code CLI smoke coverage that requires an authenticated
   local `claude` binary and proves session list/load, a real prompt completion,
   a real tool/file update flow with permission auto-approval, a stdio MCP tool
