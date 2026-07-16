@@ -134,8 +134,15 @@ wraps the native Claude process execution so hosts can show the outer command
 boundary. The session state is lightweight in the adapter, but session ids are
 Claude-native UUIDs. New sessions are created with `claude --session-id`; later
 prompts and host-known sessions adopted through `session/load` or
-`session/resume` continue with `claude --resume`. `session/fork` and transcript
-replay remain in-memory conveniences while the adapter process is alive.
+`session/resume` continue with `claude --resume`. If a host-known session was
+persisted before an earlier Claude process launched, Claude has no matching
+native conversation after adapter restart. In that narrow case, the adapter
+classifies the prompt failure as `native_session_missing`, but only when Claude
+reports the exact UUID-bound error before emitting any prompt output. The ACP
+host decides from its persisted transcript whether replacing that native
+conversation is safe; the adapter never retries a prompt. `session/fork` and
+transcript replay remain in-memory conveniences while the adapter process is
+alive.
 `session/list` returns the adapter's currently loaded session metadata, and
 later prompts receive a bounded transcript prelude so command-backed turns keep
 conversational context while still using Claude's native session id.

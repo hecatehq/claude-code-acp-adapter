@@ -11,7 +11,6 @@ import (
 	"os"
 	"regexp"
 	"strings"
-	"sync/atomic"
 
 	"github.com/hecatehq/acp-adapter-kit/acp"
 	"github.com/hecatehq/acp-adapter-kit/adaptercli"
@@ -29,10 +28,7 @@ const (
 const configDefault = "__default__"
 const authMethodAgentLogin = "agent-login"
 
-var (
-	claudeSessionIDPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
-	fallbackSessionID      atomic.Uint64
-)
+var claudeSessionIDPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
 func NewCLISpec(version string, stdin io.Reader, stdout io.Writer, stderr io.Writer) adaptercli.Spec {
 	return adaptercli.Spec{
@@ -79,17 +75,18 @@ func Options() []acp.Option {
 
 func CommandSpec() *commandbridge.Spec {
 	return &commandbridge.Spec{
-		NewID:               newClaudeSessionID,
-		LoadUnknownSessions: true,
-		Options:             ConfigOptions(),
-		Commands:            AvailableCommands(),
-		AuthMethods:         AuthMethods(),
-		IncludeTranscript:   true,
-		BuildPrompt:         PromptCommand,
-		BuildAuthenticate:   AuthenticateCommand,
-		BuildLogout:         LogoutCommand,
-		AuthRequired:        CommandAuthRequired,
-		NewStreamParser:     NewStreamParser,
+		NewID:                 newClaudeSessionID,
+		LoadUnknownSessions:   true,
+		Options:               ConfigOptions(),
+		Commands:              AvailableCommands(),
+		AuthMethods:           AuthMethods(),
+		IncludeTranscript:     true,
+		BuildPrompt:           PromptCommand,
+		BuildAuthenticate:     AuthenticateCommand,
+		BuildLogout:           LogoutCommand,
+		AuthRequired:          CommandAuthRequired,
+		ClassifyPromptFailure: classifyClaudePromptFailure,
+		NewStreamParser:       NewStreamParser,
 	}
 }
 
@@ -304,17 +301,19 @@ func CommandAuthRequired(result adapterprocess.Result, err error) bool {
 }
 
 func newClaudeSessionID() string {
+	return newClaudeSessionIDFrom(rand.Reader)
+}
+
+func newClaudeSessionIDFrom(reader io.Reader) string {
 	var b [16]byte
-	if _, err := rand.Read(b[:]); err != nil {
-		return fallbackClaudeSessionID()
+	if _, err := io.ReadFull(reader, b[:]); err != nil {
+		// The shared bridge rejects an empty custom ID before mutating session
+		// state. A process-local fallback could collide after an adapter restart.
+		return ""
 	}
 	b[6] = (b[6] & 0x0f) | 0x40
 	b[8] = (b[8] & 0x3f) | 0x80
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
-}
-
-func fallbackClaudeSessionID() string {
-	return fmt.Sprintf("00000000-0000-4000-8000-%012x", fallbackSessionID.Add(1))
 }
 
 func validClaudeSessionID(id string) bool {
