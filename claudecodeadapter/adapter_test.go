@@ -182,6 +182,89 @@ func TestNewServerLoadsKnownClaudeSessionIDAfterRestart(t *testing.T) {
 	}
 }
 
+func TestNewServerClassifiesMissingClaudeConversationAfterRestart(t *testing.T) {
+	argLog := filepath.Join(t.TempDir(), "claude-args.log")
+	missingResult := fmt.Sprintf(`{"type":"result","subtype":"error_during_execution","duration_ms":0,"duration_api_ms":0,"is_error":true,"num_turns":0,"stop_reason":null,"session_id":"550e8400-e29b-41d4-a716-446655440002","total_cost_usd":0,"usage":{"input_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":0,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":0},"inference_geo":"","iterations":[],"speed":"standard"},"modelUsage":{},"permission_denials":[],"uuid":"550e8400-e29b-41d4-a716-446655440003","errors":["No conversation found with session ID: %s"]}`, testClaudeSessionID)
+	installFakeCommand(t, "claude", `
+printf '%s\037' "$*" >> '`+argLog+`'
+case "$*" in
+  *"--resume `+testClaudeSessionID+`"*)
+    printf '%s\n' '`+missingResult+`'
+    echo "No conversation found with session ID: `+testClaudeSessionID+`" >&2
+    exit 1
+    ;;
+  *)
+    echo "unexpected command: $*" >&2
+    exit 64
+    ;;
+esac
+`)
+	client := acptest.NewClient(t, claudecodeadapter.NewServer("test"))
+	client.Request("initialize", map[string]any{})
+	client.Send(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      2,
+		"method":  "session/load",
+		"params": map[string]any{
+			"sessionId": testClaudeSessionID,
+			"cwd":       t.TempDir(),
+		},
+	})
+
+	responses := client.Send(promptRequest(3, testClaudeSessionID, "retry after restart"))
+	assertMissingClaudeSessionLifecycle(t, responses, testClaudeSessionID)
+
+	raw, err := os.ReadFile(argLog)
+	if err != nil {
+		t.Fatalf("read arg log: %v", err)
+	}
+	invocations := strings.Split(strings.TrimSuffix(string(raw), "\x1f"), "\x1f")
+	if len(invocations) != 1 || !strings.Contains(invocations[0], "--resume "+testClaudeSessionID) || strings.Contains(invocations[0], "--session-id "+testClaudeSessionID) {
+		t.Fatalf("arg log = %q, want exactly one resume attempt and no adapter retry", raw)
+	}
+}
+
+func assertMissingClaudeSessionLifecycle(t testing.TB, responses []acptest.Response, sessionID string) {
+	t.Helper()
+	if len(responses) != 3 {
+		t.Fatalf("missing-session responses = %#v, want wrapper start, wrapper failure, and prompt error only", responses)
+	}
+	start := decodeSessionUpdate(t, responses[0])
+	if start.SessionID != sessionID ||
+		start.Update.SessionUpdate != "tool_call" ||
+		!strings.HasPrefix(start.Update.ToolCallID, "prompt-command-") ||
+		start.Update.Title != "Run claude" ||
+		start.Update.Kind != "execute" ||
+		start.Update.Status != "in_progress" {
+		t.Fatalf("missing-session wrapper start = %#v, want exact command start", start)
+	}
+	finish := decodeSessionUpdate(t, responses[1])
+	if finish.SessionID != sessionID ||
+		finish.Update.SessionUpdate != "tool_call_update" ||
+		finish.Update.ToolCallID != start.Update.ToolCallID ||
+		finish.Update.Title != "Run claude" ||
+		finish.Update.Kind != "execute" ||
+		finish.Update.Status != "failed" {
+		t.Fatalf("missing-session wrapper finish = %#v, want matching failed command", finish)
+	}
+	promptErr := responses[2].Error
+	if promptErr == nil || promptErr.Code != -32000 || promptErr.Message != "prompt command failed" {
+		t.Fatalf("missing-session prompt error = %#v, want -32000 prompt command failed", promptErr)
+	}
+	errorData, err := json.Marshal(promptErr.Data)
+	if err != nil {
+		t.Fatalf("marshal missing-session error data: %v", err)
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(errorData, &fields); err != nil {
+		t.Fatalf("decode missing-session error data: %v", err)
+	}
+	var errorKind string
+	if err := json.Unmarshal(fields["errorKind"], &errorKind); err != nil || errorKind != "native_session_missing" {
+		t.Fatalf("missing-session top-level errorKind = %q (error %v) in %s, want native_session_missing", errorKind, err, errorData)
+	}
+}
+
 func TestNewServerMatchesPortableUpstreamParity(t *testing.T) {
 	adaptertest.AssertUpstreamParityContract(t, claudecodeadapter.NewServer("test"), adaptertest.UpstreamParityContract{
 		CWD:          t.TempDir(),
@@ -1360,7 +1443,8 @@ func TestClaudeStreamParserCarriesToolMetadataToResult(t *testing.T) {
 }
 
 type sessionUpdate struct {
-	Update struct {
+	SessionID string `json:"sessionId"`
+	Update    struct {
 		SessionUpdate     string          `json:"sessionUpdate"`
 		ToolCallID        string          `json:"toolCallId"`
 		Title             string          `json:"title"`

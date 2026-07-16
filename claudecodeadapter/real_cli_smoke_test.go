@@ -3,6 +3,8 @@
 package claudecodeadapter_test
 
 import (
+	"crypto/rand"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -32,6 +34,7 @@ func TestRealClaudeCodeCLISmoke(t *testing.T) {
 
 	responses := client.PromptText("prompt-basic", session.SessionID, "Reply briefly with one sentence confirming the Claude Code ACP adapter real CLI smoke. Do not inspect files or run commands.", 4*time.Minute)
 	assertRealCLIPromptCompleted(t, responses, "Claude Code")
+	assertRealCLIMissingSessionClassification(t, client)
 
 	setRealCLIConfigOption(t, client, session.SessionID, "permission_mode", "bypassPermissions")
 	toolFile := filepath.Join(session.CWD, "acp-real-cli-tool.txt")
@@ -60,6 +63,34 @@ func TestRealClaudeCodeCLISmoke(t *testing.T) {
 	cancelResponses := client.PromptTextAndCancel("prompt-cancel", cancelSession.SessionID, "Run a local shell command that sleeps for 30 seconds, then reply with the word done.", 4*time.Second, 4*time.Minute)
 	assertRealCLIPromptCancelled(t, cancelResponses, "Claude Code")
 	client.AssertNoLateResponse("prompt-cancel", time.Second)
+}
+
+func assertRealCLIMissingSessionClassification(t testing.TB, client *acptest.LiveClient) {
+	t.Helper()
+	missingID := randomRealCLIUUID(t)
+	loadResponses := client.Request("session-load-missing", "session/load", map[string]any{
+		"sessionId": missingID,
+		"cwd":       t.TempDir(),
+	}, 4*time.Minute)
+	if len(loadResponses) == 0 {
+		t.Fatal("session/load for missing native conversation returned no responses")
+	}
+	var loadResult map[string]any
+	loadResponses[len(loadResponses)-1].ResultInto(t, &loadResult)
+
+	responses := client.PromptText("prompt-missing-native", missingID, "Reply with the word unreachable.", 4*time.Minute)
+	assertMissingClaudeSessionLifecycle(t, responses, missingID)
+}
+
+func randomRealCLIUUID(t testing.TB) string {
+	t.Helper()
+	var value [16]byte
+	if _, err := rand.Read(value[:]); err != nil {
+		t.Fatalf("generate missing native session UUID: %v", err)
+	}
+	value[6] = (value[6] & 0x0f) | 0x40
+	value[8] = (value[8] & 0x3f) | 0x80
+	return fmt.Sprintf("%x-%x-%x-%x-%x", value[0:4], value[4:6], value[6:8], value[8:10], value[10:16])
 }
 
 func assertRealCLIPromptCompleted(t testing.TB, responses []acptest.Response, provider string) {

@@ -131,7 +131,10 @@ production-grade.
   `claude --print --output-format stream-json` argv construction with
   `--session-id` for fresh sessions and `--resume` for continuations, Claude
   UUID session creation, host-known session id adoption on
-  `session/load`, `/init`/`/review`/`/code-review`/`/security-review`
+  `session/load`, fail-closed `native_session_missing` classification when
+  Claude reports that the matching session has no native conversation before
+  emitting output, with retry policy left to the ACP host,
+  `/init`/`/review`/`/code-review`/`/security-review`
   `/compact`/`/debug`/`/run`/`/verify` advertisement through the normal
   `claude --print` prompt path, additional workspace directories, ACP stdio/HTTP
   MCP server config propagation into Claude `--mcp-config` with the required
