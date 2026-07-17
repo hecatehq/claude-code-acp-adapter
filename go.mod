@@ -12,7 +12,7 @@ require (
 )
 
 require (
-	github.com/hecatehq/acp-adapter-kit v0.1.1-0.20260717080901-27f28e918caa
+	github.com/hecatehq/acp-adapter-kit v0.1.1-0.20260717083303-8510f612270d
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/spf13/pflag v1.0.9 // indirect
 )
