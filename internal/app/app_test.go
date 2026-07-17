@@ -89,8 +89,8 @@ func TestNoArgsStartsACPStdio(t *testing.T) {
 	if result.AgentInfo.Name != "claude-code-acp-adapter" || result.AgentInfo.Title != "Claude Code ACP Adapter" {
 		t.Fatalf("agent info = %#v, want Claude adapter metadata", result.AgentInfo)
 	}
-	if !result.AgentCapabilities.PromptCapabilities.Image || !result.AgentCapabilities.PromptCapabilities.EmbeddedContext {
-		t.Fatalf("prompt capabilities = %#v, want image + embedded context", result.AgentCapabilities.PromptCapabilities)
+	if result.AgentCapabilities.PromptCapabilities.Image || result.AgentCapabilities.PromptCapabilities.EmbeddedContext {
+		t.Fatalf("prompt capabilities = %#v, want resource-link-only command bridge", result.AgentCapabilities.PromptCapabilities)
 	}
 	if !result.AgentCapabilities.MCPCapabilities.HTTP || !result.AgentCapabilities.MCPCapabilities.SSE {
 		t.Fatalf("mcp capabilities = %#v, want HTTP + SSE", result.AgentCapabilities.MCPCapabilities)

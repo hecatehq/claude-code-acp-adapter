@@ -2,11 +2,10 @@
 
 Neutral Go ACP adapter for Claude Code.
 
-This repository provides a Go ACP adapter for Claude Code. It runs as a small,
-auditable binary that speaks ACP over stdio. The adapter can run Claude Code
-prompts through its native command bridge. Hecate integration is covered by
-release-binary smoke tests; deeper Claude-native parity remains tracked as
-future work.
+This repository provides a Go ACP adapter for Claude Code. It can run as a
+small, auditable ACP stdio binary or as an in-process Go library. Both modes run
+Claude Code prompts through the same native command bridge; deeper
+Claude-native parity remains tracked as future work.
 
 ## Goals
 
@@ -83,13 +82,14 @@ and fake-runtime test code lives in
 focused on the Claude Code-specific CLI boundary, doctor defaults, docs, release
 workflow, and vendor behavior.
 
-The binary remains the primary integration mode. Hosts that need an embedded
-adapter can import
+Hosts can import
 `github.com/hecatehq/claude-code-acp-adapter/claudecodeadapter` to build the
 same ACP server, info/options, CLI spec, config options, environment allowlists,
 and Claude Code prompt command without shelling out to
 `claude-code-acp-adapter`. The embedded path still launches the underlying
 `claude` CLI for prompts; it only removes the extra adapter process boundary.
+`NewServerWithRunner` lets the host bind that child process to an exact
+executable path and host-owned sanitized environment.
 
 ```sh
 make release-check
@@ -159,6 +159,11 @@ remain unadvertised until their non-interactive behavior is explicitly tested.
 The adapter advertises one ACP auth method (`agent-login`): ACP
 `authenticate` maps to `claude /login`, and ACP `logout` maps to
 `claude auth logout`.
+
+The command-backed path does not advertise ACP inline-image or embedded-context
+capabilities. Hosts should provide files and images as ACP resource links; the
+adapter turns each link into an explicit name, MIME type, and URI in the prompt
+passed to `claude`.
 
 The root ACP server can also launch an explicit subprocess-backed ACP runtime
 with `--runtime-binary`, `--runtime-workdir`, and repeated `--runtime-arg`

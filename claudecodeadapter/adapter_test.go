@@ -1,6 +1,7 @@
 package claudecodeadapter_test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -15,6 +16,7 @@ import (
 	"github.com/hecatehq/acp-adapter-kit/acptest"
 	"github.com/hecatehq/acp-adapter-kit/adaptertest"
 	"github.com/hecatehq/acp-adapter-kit/commandbridge"
+	adapterprocess "github.com/hecatehq/acp-adapter-kit/process"
 	"github.com/hecatehq/acp-adapter-kit/runtimeacp"
 	"github.com/hecatehq/claude-code-acp-adapter/claudecodeadapter"
 )
@@ -29,8 +31,8 @@ func TestInfoPinsClaudeCapabilities(t *testing.T) {
 	if info.Name != claudecodeadapter.Name || info.Title != claudecodeadapter.Title || info.Version != "1.2.3" {
 		t.Fatalf("info = %#v, want Claude Code adapter metadata", info)
 	}
-	if !info.Capabilities.Images ||
-		!info.Capabilities.EmbeddedContext ||
+	if info.Capabilities.Images ||
+		info.Capabilities.EmbeddedContext ||
 		!info.Capabilities.MCPHTTP ||
 		!info.Capabilities.MCPSSE ||
 		!info.Capabilities.LoadSession ||
@@ -54,8 +56,8 @@ func TestInitializeAdvertisesLoadSession(t *testing.T) {
 		Name:                  claudecodeadapter.Name,
 		Title:                 claudecodeadapter.Title,
 		Version:               "test",
-		Images:                true,
-		EmbeddedContext:       true,
+		Images:                false,
+		EmbeddedContext:       false,
 		MCPHTTP:               true,
 		MCPSSE:                true,
 		LoadSession:           true,
@@ -727,6 +729,22 @@ printf 'logged in\n'
 	resp.ResultInto(t, &result)
 	if len(result) != 0 {
 		t.Fatalf("authenticate result = %#v, want empty object", result)
+	}
+}
+
+func TestNewServerWithRunnerUsesHostRunner(t *testing.T) {
+	var got adapterprocess.Spec
+	runner := commandbridge.RunnerFunc(func(_ context.Context, spec adapterprocess.Spec) (adapterprocess.Result, error) {
+		got = spec
+		return adapterprocess.Result{}, nil
+	})
+	client := acptest.NewClient(t, claudecodeadapter.NewServerWithRunner("test", runner))
+
+	resp := client.Request("authenticate", map[string]any{"methodId": "agent-login"})
+	var result map[string]any
+	resp.ResultInto(t, &result)
+	if got.Command != "claude" || len(got.Args) != 1 || got.Args[0] != "/login" {
+		t.Fatalf("runner command = %q args=%#v, want claude /login", got.Command, got.Args)
 	}
 }
 

@@ -50,9 +50,10 @@ func Info(version string) acp.AdapterInfo {
 		Name:    Name,
 		Title:   Title,
 		Version: version,
+		// Claude's non-interactive CLI consumes attachment paths in prompt text,
+		// not ACP inline image/blob blocks. Keep those capabilities false so the
+		// host supplies private resource links that the shared bridge can forward.
 		Capabilities: acp.Capabilities{
-			Images:                true,
-			EmbeddedContext:       true,
 			MCPHTTP:               true,
 			MCPSSE:                true,
 			LoadSession:           true,
@@ -66,7 +67,18 @@ func Info(version string) acp.AdapterInfo {
 }
 
 func NewServer(version string) *acp.Server {
-	return acp.NewServer(Info(version), Options()...)
+	return NewServerWithRunner(version, nil)
+}
+
+// NewServerWithRunner builds the embeddable ACP server with a host-owned
+// provider process runner. A nil runner preserves the standalone adapter's
+// fixed-argv process behavior.
+func NewServerWithRunner(version string, runner commandbridge.Runner) *acp.Server {
+	spec := CommandSpec()
+	if runner != nil {
+		spec.Runner = runner
+	}
+	return acp.NewServer(Info(version), commandbridge.New(*spec).Options()...)
 }
 
 func Options() []acp.Option {
