@@ -5,7 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -286,6 +288,7 @@ func TestCommandBridgeRunsClaudePrintWithConfigOptions(t *testing.T) {
 			"--add-dir", extraDir,
 			"--model", "sonnet",
 			"--effort", "high",
+			"--",
 			"hello claude",
 		}
 		if got.Command != "claude" || got.Dir != workdir || !reflect.DeepEqual(got.Args, wantArgs) {
@@ -378,6 +381,106 @@ func TestCommandBridgeRunsClaudePrintWithConfigOptions(t *testing.T) {
 	decodeAppResult(t, responses[12], &prompt)
 	if prompt.StopReason != "end_turn" {
 		t.Fatalf("stop reason = %q, want end_turn", prompt.StopReason)
+	}
+}
+
+func TestCommandBridgeGrantsPrivateResourceStageBeforeDelimitedPrompt(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	workdir := t.TempDir()
+	sourceDir := t.TempDir()
+	sourcePath := filepath.Join(sourceDir, "input.txt")
+	if err := os.WriteFile(sourcePath, []byte("private input"), 0o600); err != nil {
+		t.Fatalf("write source file: %v", err)
+	}
+	uriPath := filepath.ToSlash(sourcePath)
+	if !strings.HasPrefix(uriPath, "/") {
+		uriPath = "/" + uriPath
+	}
+	sourceURI := (&url.URL{Scheme: "file", Path: uriPath}).String()
+	requests := []map[string]any{
+		{
+			"jsonrpc": "2.0",
+			"id":      1,
+			"method":  "session/new",
+			"params":  map[string]any{"cwd": workdir},
+		},
+		{
+			"jsonrpc": "2.0",
+			"id":      2,
+			"method":  "session/prompt",
+			"params": map[string]any{
+				"sessionId": testClaudeSessionID,
+				"prompt": []map[string]any{
+					{"type": "text", "text": "read the attachment"},
+					{"type": "resource_link", "uri": sourceURI, "name": "input.txt", "mimeType": "text/plain"},
+				},
+			},
+		},
+	}
+	var input strings.Builder
+	for _, request := range requests {
+		encoded, err := json.Marshal(request)
+		if err != nil {
+			t.Fatalf("marshal request: %v", err)
+		}
+		input.Write(encoded)
+		input.WriteByte('\n')
+	}
+
+	var stagedDir string
+	spec := adapterSpec(strings.NewReader(input.String()), &stdout, &stderr)
+	spec.Command.NewID = func() string { return testClaudeSessionID }
+	spec.Command.Runner = commandbridge.RunnerFunc(func(_ context.Context, got adapterprocess.Spec) (adapterprocess.Result, error) {
+		if got.Command != "claude" || got.Dir != workdir {
+			t.Fatalf("process spec = %#v", got)
+		}
+		for index, arg := range got.Args {
+			if arg == "--add-dir" && index+1 < len(got.Args) {
+				stagedDir = got.Args[index+1]
+			}
+		}
+		if stagedDir == "" || stagedDir == sourceDir {
+			t.Fatalf("--add-dir = %q, want private prompt stage", stagedDir)
+		}
+		if len(got.Args) < 2 || got.Args[len(got.Args)-2] != "--" {
+			t.Fatalf("args = %#v, want prompt delimiter", got.Args)
+		}
+		stagedPath := filepath.Join(stagedDir, "01-input.txt")
+		prompt := got.Args[len(got.Args)-1]
+		var renderedPath string
+		for _, line := range strings.Split(prompt, "\n") {
+			var manifest struct {
+				Path string `json:"path"`
+			}
+			if err := json.Unmarshal([]byte(line), &manifest); err == nil && manifest.Path != "" {
+				renderedPath = manifest.Path
+				break
+			}
+		}
+		encodedSourcePath, err := json.Marshal(sourcePath)
+		if err != nil {
+			t.Fatalf("marshal source path: %v", err)
+		}
+		if renderedPath != stagedPath || strings.Contains(prompt, sourcePath) ||
+			strings.Contains(prompt, string(encodedSourcePath)) || strings.Contains(prompt, sourceURI) {
+			t.Fatalf("prompt did not reference only the private staged path: rendered=%q want=%q", renderedPath, stagedPath)
+		}
+		data, err := os.ReadFile(stagedPath)
+		if err != nil || string(data) != "private input" {
+			t.Fatalf("read staged input: data=%q err=%v", data, err)
+		}
+		return adapterprocess.Result{Stdout: []byte("claude answer")}, nil
+	})
+
+	if code := adaptercli.Run(nil, spec); code != 0 {
+		t.Fatalf("Run returned %d, want 0; stderr=%q stdout=%q", code, stderr.String(), stdout.String())
+	}
+	if stagedDir == "" {
+		t.Fatal("runner did not observe a private prompt stage")
+	}
+	if _, err := os.Stat(stagedDir); !os.IsNotExist(err) {
+		t.Fatalf("private prompt stage remains after turn: %v", err)
 	}
 }
 

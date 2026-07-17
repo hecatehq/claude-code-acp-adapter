@@ -136,9 +136,11 @@ production-grade.
   emitting output, with retry policy left to the ACP host,
   `/init`/`/review`/`/code-review`/`/security-review`
   `/compact`/`/debug`/`/run`/`/verify` advertisement through the normal
-  `claude --print` prompt path, additional workspace directories, ACP stdio/HTTP
+  `claude --print` prompt path, additional workspace directories, local ACP
+  resource-link private staging through per-prompt `--add-dir`, ACP stdio/HTTP
   MCP server config propagation into Claude `--mcp-config` with the required
-  option delimiter before the prompt, streamed JSONL
+  option delimiter after variadic directory/MCP flags and before every prompt,
+  streamed JSONL
   parsing into ACP assistant text, thinking, tool-call, usage, and terminal
   stop-reason updates, Claude tool kind classification for
   shell/file/web/task/memory/todo/plan tools, failed status mapping for

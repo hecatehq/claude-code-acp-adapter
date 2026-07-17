@@ -448,10 +448,24 @@ func TestPromptCommandBuildsClaudePrint(t *testing.T) {
 		"--add-dir", "/extra",
 		"--model", "sonnet",
 		"--effort", "high",
+		"--",
 		"hello claude",
 	}
 	if got.Command != "claude" || got.Dir != "/work" || !reflect.DeepEqual(got.Args, wantArgs) {
 		t.Fatalf("process spec = %#v, want claude args %#v", got, wantArgs)
+	}
+}
+
+func TestPromptCommandAlwaysDelimitsOptionShapedPrompt(t *testing.T) {
+	got, err := claudecodeadapter.PromptCommand(commandbridge.Session{
+		ID:  testClaudeSessionID,
+		CWD: "/work",
+	}, runtimeacp.PromptParams{Prompt: []runtimeacp.ContentBlock{{Type: "text", Text: "--version"}}})
+	if err != nil {
+		t.Fatalf("PromptCommand: %v", err)
+	}
+	if got.Args[len(got.Args)-2] != "--" || got.Args[len(got.Args)-1] != "--version" {
+		t.Fatalf("args = %#v, want option delimiter before prompt", got.Args)
 	}
 }
 
@@ -476,6 +490,7 @@ func TestPromptCommandResumesEstablishedClaudeSession(t *testing.T) {
 		"--verbose",
 		"--resume", testClaudeSessionID,
 		"--permission-mode", "dontAsk",
+		"--",
 		"hello again",
 	}
 	if got.Command != "claude" || got.Dir != "/work" || !reflect.DeepEqual(got.Args, wantArgs) {
@@ -545,6 +560,7 @@ func TestPromptCommandBuildsClaudeInitAsPrint(t *testing.T) {
 		"--permission-mode", "plan",
 		"--model", "sonnet",
 		"--effort", "high",
+		"--",
 		"/init focus on repo guidance",
 	}
 	if got.Command != "claude" || got.Dir != "/work" || !reflect.DeepEqual(got.Args, wantArgs) {
@@ -572,6 +588,7 @@ func TestPromptCommandBuildsClaudeReviewCommandAsPrint(t *testing.T) {
 		"--verbose",
 		"--session-id", testClaudeSessionID,
 		"--permission-mode", "dontAsk",
+		"--",
 		"/security-review focus on auth changes",
 	}
 	if got.Command != "claude" || got.Dir != "/work" || !reflect.DeepEqual(got.Args, wantArgs) {
@@ -599,6 +616,7 @@ func TestPromptCommandBuildsClaudeBypassPermissionsMode(t *testing.T) {
 		"--verbose",
 		"--session-id", testClaudeSessionID,
 		"--permission-mode", "bypassPermissions",
+		"--",
 		"use full access",
 	}
 	if got.Command != "claude" || got.Dir != "/work" || !reflect.DeepEqual(got.Args, wantArgs) {
@@ -946,23 +964,15 @@ fi
 printf '{"type":"permission_request","toolUse":{"toolUseId":"tool-1","name":"Bash","input":{"command":"go test ./..."}},"options":[{"optionId":"allow","name":"Allow","kind":"allow_once"},{"optionId":"reject","name":"Reject","kind":"reject_once"}]}\n'
 printf '{"type":"assistant","message":{"content":[{"type":"text","text":"allowed"}]}}\n'
 `)
-	client := acptest.NewClient(t, claudecodeadapter.NewServer("test"))
-	client.Request("initialize", map[string]any{})
-	createdResponses := client.Send(map[string]any{
-		"jsonrpc": "2.0",
-		"id":      2,
-		"method":  "session/new",
-		"params":  map[string]any{"cwd": t.TempDir()},
-	})
+	client := acptest.NewLiveClient(t, claudecodeadapter.NewServer("test"), acptest.WithAutoAllowPermissions())
+	client.Request("initialize", "initialize", map[string]any{}, time.Second)
+	createdResponses := client.Request("new-session", "session/new", map[string]any{"cwd": t.TempDir()}, time.Second)
 	var session struct {
 		SessionID string `json:"sessionId"`
 	}
-	createdResponses[1].ResultInto(t, &session)
+	createdResponses[len(createdResponses)-1].ResultInto(t, &session)
 
-	responses := client.SendRaw(strings.Join([]string{
-		`{"jsonrpc":"2.0","id":3,"method":"session/prompt","params":{"sessionId":"` + session.SessionID + `","prompt":[{"type":"text","text":"hello"}]}}`,
-		`{"jsonrpc":"2.0","id":"server-1","result":{"outcome":{"outcome":"selected","optionId":"allow"}}}`,
-	}, "\n") + "\n")
+	responses := client.PromptText("prompt", session.SessionID, "hello", time.Second)
 	if len(responses) != 6 {
 		t.Fatalf("responses = %#v, want tool start + permission + answer + tool finish + session info + prompt result", responses)
 	}
