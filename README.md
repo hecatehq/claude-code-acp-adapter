@@ -163,7 +163,10 @@ The adapter advertises one ACP auth method (`agent-login`): ACP
 The command-backed path does not advertise ACP inline-image or embedded-context
 capabilities. Hosts should provide files and images as ACP resource links; the
 adapter turns each link into an explicit name, MIME type, and URI in the prompt
-passed to `claude`.
+passed to `claude`. The shared command bridge validates and privately restages
+local file links, then the adapter grants Claude access to that prompt-scoped
+staging directory via `--add-dir`. Remote links remain unfetched prompt
+metadata. Invalid local links fail before the provider process starts.
 
 The root ACP server can also launch an explicit subprocess-backed ACP runtime
 with `--runtime-binary`, `--runtime-workdir`, and repeated `--runtime-arg`
