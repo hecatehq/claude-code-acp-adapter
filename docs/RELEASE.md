@@ -18,12 +18,11 @@ make snapshot
 
 ## Tagging
 
-Use semantic version tags, including alpha prereleases while the adapter is not
-production-ready:
+Use semantic version tags. Add a prerelease suffix only for prerelease builds:
 
 ```sh
-git tag v0.1.0-alpha.1
-git push origin v0.1.0-alpha.1
+git tag v0.2.0
+git push origin v0.2.0
 ```
 
 Pushing a `v*` tag runs `.github/workflows/release.yml`, which uses GoReleaser
@@ -40,7 +39,7 @@ generates GitHub artifact attestations from that checksum file using
 Download the archive and checksum file for the tag:
 
 ```sh
-tag=v0.1.0-alpha.31
+tag=v0.2.0
 version="${tag#v}"
 archive="claude-code-acp-adapter_${version}_linux_amd64.tar.gz"
 
