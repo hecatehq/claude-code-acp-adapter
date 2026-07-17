@@ -2,9 +2,9 @@
 
 This repository tests the adapter scaffold, the subprocess-backed ACP runtime
 bridge, and the native Claude Code command bridge Hecate uses today. Hecate's
-replacement path is covered by Hecate release-binary smoke tests; this adapter
-repo still tracks deeper Claude-native parity before calling the adapter
-production-grade.
+embedded path is covered by its agent-adapter integration tests and opt-in
+authenticated embedded smoke; this adapter repo still tracks deeper
+Claude-native parity before calling the adapter production-grade.
 
 ## Covered Today
 

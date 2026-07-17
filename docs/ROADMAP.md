@@ -82,7 +82,7 @@
   `/code-review`, and `/security-review` stay on the normal `claude --print`
   prompt path, and additional commands need parity tests before being exposed
 - continue hardening auth/session/prompt/cancel/config/mcp/tool mappings with
-  source-shaped parser fixtures and real Hecate release-binary smoke tests;
+  source-shaped parser fixtures and real Hecate embedded-adapter smoke tests;
   deeper elicitation and provider-native permission edge cases remain parity
   work
 - port the edge cases recorded in `SOURCE_REVIEW.md`
@@ -92,7 +92,6 @@
 - checksum-backed release archives with GitHub artifact attestations from the
   tag workflow
 - keep `docs/STABLE_READINESS.md` current until the stable gate is green
-- keep Hecate registry/Dockerfile pins pointed at the released
-  `claude-code-acp-adapter` binary, and run Hecate's ACP adapter release smoke
-  after every adapter release bump
+- keep Hecate's Go module pin pointed at the released adapter tag, and run
+  Hecate's built-in adapter integration tests after every adapter release bump
 - no Hecate runtime launch path depends on a package-manager adapter wrapper

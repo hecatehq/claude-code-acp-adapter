@@ -37,9 +37,11 @@ func TestReleaseDocsDescribeStableReadinessGate(t *testing.T) {
 
 	stable := readRepoText(t, "docs/STABLE_READINESS.md")
 	for _, want := range []string{
+		"Required Gate For Every Stable Release",
 		"make release-check",
 		"make real-cli-smoke",
-		"Hecate ACP adapter release-binary smoke",
+		"Hecate compiles the versioned Go adapter library",
+		"test-acp-real-embedded",
 		"Parity Matrix",
 		"Release artifacts",
 		"gh attestation verify",
