@@ -78,9 +78,12 @@
   which would change the adapter's current initialize wire shape
 - expand the native Claude Code / Claude Agent integration boundary beyond
   `claude --print`
-- keep adapter-owned slash commands explicit: `/init`, `/review`,
-  `/code-review`, and `/security-review` stay on the normal `claude --print`
-  prompt path, and additional commands need parity tests before being exposed
+- discover Claude-owned commands dynamically through a bounded bare/minimal
+  stream-JSON control exchange, then publish the provider snapshot as ACP
+  `available_commands_update` notifications without an adapter allowlist
+- keep any future unrestricted project/plugin command inventory behind an
+  explicit trusted-context product decision; automatic discovery must not run
+  hooks, plugin sync, or automatic project initialization
 - continue hardening auth/session/prompt/cancel/config/mcp/tool mappings with
   source-shaped parser fixtures and real Hecate embedded-adapter smoke tests;
   deeper elicitation and provider-native permission edge cases remain parity

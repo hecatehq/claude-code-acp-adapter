@@ -209,8 +209,8 @@ func setRealCLIConfigOption(t testing.TB, client *acptest.LiveClient, sessionID,
 		"configId":  configID,
 		"value":     value,
 	}, 4*time.Minute)
-	if len(responses) != 2 {
-		t.Fatalf("session/set_config_option responses = %#v, want update + result", responses)
+	if len(responses) < 2 {
+		t.Fatalf("session/set_config_option responses = %#v, want config update + result (and optional asynchronous command catalog update)", responses)
 	}
 	var result struct {
 		ConfigOptions []struct {
