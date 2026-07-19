@@ -49,9 +49,9 @@ Implemented:
 - command-backed `session/list` metadata, `config_option_update`
   notifications for config changes, and `session_info_update` notifications
   when transcript metadata changes
-- command-backed `/init`, `/review`, `/code-review`, `/security-review`,
-  `/compact`, `/debug`, `/run`, and `/verify` advertisement through the normal
-  `claude --print` prompt path
+- live provider-owned command discovery through a short-lived Claude
+  stream-JSON control exchange, published as replacement ACP
+  `available_commands_update` snapshots (including provider aliases)
 - command-backed ACP stdio/HTTP MCP server config propagation into Claude
   `--mcp-config` with `--strict-mcp-config`
 - Claude `--output-format stream-json` translation into ACP assistant text,
@@ -69,8 +69,9 @@ Not implemented yet:
   Claude `--session-id` creation and `--resume` continuation
 - deeper provider-native permission/MCP lifecycle and elicitation edge cases
   beyond parsed request mapping and the selected Claude Code permission mode
-- deeper Claude-native slash-command semantics beyond the adapter-owned command
-  set
+- an explicit trusted mode for an unrestricted project/plugin command catalog;
+  automatic discovery intentionally uses Claude CLI's documented bare/minimal
+  startup boundary
 - runtime config/auth/model discovery and orphan-result handling
 - draft ACP RFD surfaces documented as future work in `docs/STABLE_READINESS.md`
 
@@ -89,7 +90,10 @@ and Claude Code prompt command without shelling out to
 `claude-code-acp-adapter`. The embedded path still launches the underlying
 `claude` CLI for prompts; it only removes the extra adapter process boundary.
 `NewServerWithRunner` lets the host bind that child process to an exact
-executable path and host-owned sanitized environment.
+executable path and host-owned sanitized environment. To receive live command
+catalog updates, that runner must also implement the shared
+`commandbridge.CommandStarter` interface; otherwise prompts remain available
+and command discovery is intentionally skipped.
 
 ```sh
 make release-check
@@ -152,10 +156,17 @@ deleting the owning chat/session. Config changes return the current config
 option list and publish `config_option_update` notifications. Completed
 command-backed prompts publish `session_info_update` notifications with the
 in-memory title and updated timestamp when transcript metadata changes.
-The adapter advertises `/init`, `/review`, `/code-review`, `/security-review`,
-`/compact`, `/debug`, `/run`, and `/verify` as ACP available commands and passes
-them through the normal `claude --print` prompt path. Other Claude Code commands
-remain unadvertised until their non-interactive behavior is explicitly tested.
+After a session lifecycle change, the adapter asks Claude Code for its live
+command inventory through a bounded, no-prompt `--print --bare` stream-JSON
+control exchange. The resulting `available_commands_update` is a replacement
+snapshot: the adapter does not maintain, filter, or extend a static slash-command
+allowlist, and aliases are included when Claude advertises them. The probe uses
+Claude CLI's documented bare/minimal startup boundary plus a strict MCP
+boundary: it omits prompts, native session ids, MCP configuration, and
+extra directories; it intentionally does not trigger automatic project/plugin
+initialization. Command discovery is best-effort—an unavailable or malformed
+catalog never prevents a usable ACP session—and provider output other than the
+bounded command fields is discarded.
 The adapter advertises one ACP auth method (`agent-login`): ACP
 `authenticate` maps to `claude /login`, and ACP `logout` maps to
 `claude auth logout`.

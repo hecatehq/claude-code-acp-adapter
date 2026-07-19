@@ -134,9 +134,11 @@ Claude-native parity before calling the adapter production-grade.
   `session/load`, fail-closed `native_session_missing` classification when
   Claude reports that the matching session has no native conversation before
   emitting output, with retry policy left to the ACP host,
-  `/init`/`/review`/`/code-review`/`/security-review`
-  `/compact`/`/debug`/`/run`/`/verify` advertisement through the normal
-  `claude --print` prompt path, additional workspace directories, local ACP
+  bounded Claude bare/minimal control discovery for the live provider command
+  inventory, including exact no-prompt argv/stdin, aliases, malformed/missing
+  catalog rejection, output/privacy bounds, cancellation, and asynchronous ACP
+  `available_commands_update` publication; additional workspace directories,
+  local ACP
   resource-link private staging through per-prompt `--add-dir`, ACP stdio/HTTP
   MCP server config propagation into Claude `--mcp-config` with the required
   option delimiter after variadic directory/MCP flags and before every prompt,
@@ -159,10 +161,10 @@ Claude-native parity before calling the adapter production-grade.
   through the ACP command bridge
 - shared adapter conformance checks for the Hecate-facing ACP initialize
   contract, advertised auth/logout capabilities, session config selectors, and
-  available slash-command names
+  dynamic command-discovery lifecycle behavior
 - portable upstream parity checks adapted from the previous adapter suite:
-  unsupported auth methods are rejected, `session/new` emits commands before
-  returning config selectors, `session/set_config_option` updates and rejects
+  unsupported auth methods are rejected, `session/new` remains usable while
+  command discovery runs asynchronously, `session/set_config_option` updates and rejects
   invalid values, `session/list`/`session/load` expose live session state,
   host-known Claude session ids are adopted through `session/load`, and idle
   cancel/close/delete retain their ACP response shapes
@@ -195,7 +197,8 @@ Claude-native parity:
   terminal-output tool mappings beyond kind classification
 - orphan result skipping after cancelled queued prompts
 - query-closed errors for prompts/cancels after stream termination
-- local slash-command metadata stripping beyond the adapter-owned command set
+- an explicit trusted mode for unrestricted project/plugin command inventory
+  beyond the automatic bare/minimal command catalog
 - deeper vendor MCP connection lifecycle semantics and MCP tool approval
   elicitations beyond the local stdio echo-tool smoke
 - unresolved stable-release parity gates listed in `docs/STABLE_READINESS.md`

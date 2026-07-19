@@ -302,21 +302,8 @@ func TestCommandBridgeRunsClaudePrintWithConfigOptions(t *testing.T) {
 		t.Fatalf("Run returned %d, want 0; stderr=%q stdout=%q", code, stderr.String(), stdout.String())
 	}
 	responses := decodeAppResponses(t, stdout.Bytes())
-	if len(responses) != 13 {
-		t.Fatalf("got %d envelopes, want available commands, session/new, three config update notifications + responses, tool start, assistant update, tool finish, session info, prompt result\n%s", len(responses), stdout.String())
-	}
-	commands := decodeAppUpdate(t, responses[0])
-	if commands.Update.SessionUpdate != "available_commands_update" ||
-		len(commands.Update.AvailableCommands) != 8 ||
-		commands.Update.AvailableCommands[0].Name != "init" ||
-		commands.Update.AvailableCommands[1].Name != "review" ||
-		commands.Update.AvailableCommands[2].Name != "code-review" ||
-		commands.Update.AvailableCommands[3].Name != "security-review" ||
-		commands.Update.AvailableCommands[4].Name != "compact" ||
-		commands.Update.AvailableCommands[5].Name != "debug" ||
-		commands.Update.AvailableCommands[6].Name != "run" ||
-		commands.Update.AvailableCommands[7].Name != "verify" {
-		t.Fatalf("available commands = %#v, want Claude command set", commands)
+	if len(responses) != 12 {
+		t.Fatalf("got %d envelopes, want session/new, three config update notifications + responses, tool start, assistant update, tool finish, session info, prompt result\n%s", len(responses), stdout.String())
 	}
 	var created struct {
 		SessionID     string `json:"sessionId"`
@@ -326,7 +313,7 @@ func TestCommandBridgeRunsClaudePrintWithConfigOptions(t *testing.T) {
 			CurrentValue string `json:"currentValue"`
 		} `json:"configOptions"`
 	}
-	decodeAppResult(t, responses[1], &created)
+	decodeAppResult(t, responses[0], &created)
 	if created.SessionID != testClaudeSessionID || len(created.ConfigOptions) != 3 {
 		t.Fatalf("created session = %#v, want id and three config options", created)
 	}
@@ -339,37 +326,37 @@ func TestCommandBridgeRunsClaudePrintWithConfigOptions(t *testing.T) {
 	if created.ConfigOptions[2].ID != "permission_mode" || created.ConfigOptions[2].Category != "permission" || created.ConfigOptions[2].CurrentValue != "dontAsk" {
 		t.Fatalf("permission option = %#v, want permission category with dontAsk default", created.ConfigOptions[2])
 	}
-	assertConfigOptionUpdate(t, responses[2], "model", "sonnet")
+	assertConfigOptionUpdate(t, responses[1], "model", "sonnet")
 	var modelSet struct {
 		ConfigOptions []struct {
 			ID           string `json:"id"`
 			CurrentValue string `json:"currentValue"`
 		} `json:"configOptions"`
 	}
-	decodeAppResult(t, responses[3], &modelSet)
+	decodeAppResult(t, responses[2], &modelSet)
 	if len(modelSet.ConfigOptions) != 3 || modelSet.ConfigOptions[0].CurrentValue != "sonnet" {
 		t.Fatalf("model set result = %#v, want selected model", modelSet.ConfigOptions)
 	}
-	assertConfigOptionUpdate(t, responses[4], "effort", "high")
-	assertConfigOptionUpdate(t, responses[6], "permission_mode", "plan")
+	assertConfigOptionUpdate(t, responses[3], "effort", "high")
+	assertConfigOptionUpdate(t, responses[5], "permission_mode", "plan")
 
-	start := decodeAppUpdate(t, responses[8])
+	start := decodeAppUpdate(t, responses[7])
 	if start.Update.SessionUpdate != "tool_call" ||
 		start.Update.Status != "in_progress" ||
 		start.Update.ToolCallID == "" {
 		t.Fatalf("tool start = %#v, want running command", start)
 	}
-	update := decodeAppUpdate(t, responses[9])
+	update := decodeAppUpdate(t, responses[8])
 	if update.Update.SessionUpdate != "agent_message_chunk" || decodeAppChunkText(t, update.Update.Content) != "claude answer" {
 		t.Fatalf("assistant update = %#v, want claude answer", update)
 	}
-	finish := decodeAppUpdate(t, responses[10])
+	finish := decodeAppUpdate(t, responses[9])
 	if finish.Update.SessionUpdate != "tool_call_update" ||
 		finish.Update.ToolCallID != start.Update.ToolCallID ||
 		finish.Update.Status != "completed" {
 		t.Fatalf("tool finish = %#v, want completed command", finish)
 	}
-	info := decodeAppUpdate(t, responses[11])
+	info := decodeAppUpdate(t, responses[10])
 	if info.Update.SessionUpdate != "session_info_update" ||
 		info.Update.Title != "hello claude" ||
 		info.Update.UpdatedAt == "" {
@@ -378,7 +365,7 @@ func TestCommandBridgeRunsClaudePrintWithConfigOptions(t *testing.T) {
 	var prompt struct {
 		StopReason string `json:"stopReason"`
 	}
-	decodeAppResult(t, responses[12], &prompt)
+	decodeAppResult(t, responses[11], &prompt)
 	if prompt.StopReason != "end_turn" {
 		t.Fatalf("stop reason = %q, want end_turn", prompt.StopReason)
 	}

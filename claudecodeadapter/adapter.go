@@ -72,7 +72,9 @@ func NewServer(version string) *acp.Server {
 
 // NewServerWithRunner builds the embeddable ACP server with a host-owned
 // provider process runner. A nil runner preserves the standalone adapter's
-// fixed-argv process behavior.
+// fixed-argv process behavior. A runner that also implements
+// commandbridge.CommandStarter lets live command discovery use the same bound
+// Claude binary and environment as prompts.
 func NewServerWithRunner(version string, runner commandbridge.Runner) *acp.Server {
 	spec := CommandSpec()
 	if runner != nil {
@@ -87,18 +89,19 @@ func Options() []acp.Option {
 
 func CommandSpec() *commandbridge.Spec {
 	return &commandbridge.Spec{
-		NewID:                 newClaudeSessionID,
-		LoadUnknownSessions:   true,
-		Options:               ConfigOptions(),
-		Commands:              AvailableCommands(),
-		AuthMethods:           AuthMethods(),
-		IncludeTranscript:     true,
-		BuildPrompt:           PromptCommand,
-		BuildAuthenticate:     AuthenticateCommand,
-		BuildLogout:           LogoutCommand,
-		AuthRequired:          CommandAuthRequired,
-		ClassifyPromptFailure: classifyClaudePromptFailure,
-		NewStreamParser:       NewStreamParser,
+		NewID:                   newClaudeSessionID,
+		LoadUnknownSessions:     true,
+		Options:                 ConfigOptions(),
+		DiscoverCommands:        discoverAvailableCommands,
+		CommandDiscoveryTimeout: claudeCommandDiscoveryTimeout,
+		AuthMethods:             AuthMethods(),
+		IncludeTranscript:       true,
+		BuildPrompt:             PromptCommand,
+		BuildAuthenticate:       AuthenticateCommand,
+		BuildLogout:             LogoutCommand,
+		AuthRequired:            CommandAuthRequired,
+		ClassifyPromptFailure:   classifyClaudePromptFailure,
+		NewStreamParser:         NewStreamParser,
 	}
 }
 
@@ -110,49 +113,14 @@ func AuthMethods() []acp.AuthMethod {
 	}}
 }
 
+// AvailableCommands is retained for source compatibility with embedders that
+// used the pre-v0.3 catalog helper. It intentionally returns no bootstrap
+// commands: provider-owned available_commands_update snapshots from live
+// discovery are now the authoritative command inventory.
+//
+// Deprecated: consume ACP available_commands_update notifications instead.
 func AvailableCommands() []commandbridge.AvailableCommand {
-	return []commandbridge.AvailableCommand{
-		{
-			Name:        "init",
-			Description: "Ask Claude Code to inspect the workspace and create or update CLAUDE.md.",
-			InputHint:   "optional instruction focus",
-		},
-		{
-			Name:        "review",
-			Description: "Ask Claude Code to review a pull request locally in this session.",
-			InputHint:   "optional PR or review focus",
-		},
-		{
-			Name:        "code-review",
-			Description: "Ask Claude Code to review the current diff for correctness bugs and cleanups.",
-			InputHint:   "[effort] [--fix] [target]",
-		},
-		{
-			Name:        "security-review",
-			Description: "Ask Claude Code to analyze pending changes for security vulnerabilities.",
-			InputHint:   "optional target or focus",
-		},
-		{
-			Name:        "compact",
-			Description: "Ask Claude Code to compact the current conversation context.",
-			InputHint:   "optional focus to preserve",
-		},
-		{
-			Name:        "debug",
-			Description: "Ask Claude Code to debug a failure or unexpected behavior.",
-			InputHint:   "symptom, error, or target",
-		},
-		{
-			Name:        "run",
-			Description: "Ask Claude Code to run the app and inspect the result.",
-			InputHint:   "optional launch target",
-		},
-		{
-			Name:        "verify",
-			Description: "Ask Claude Code to verify that the current change works.",
-			InputHint:   "optional verification focus",
-		},
-	}
+	return nil
 }
 
 func ConfigOptions() []commandbridge.SelectConfigOption {

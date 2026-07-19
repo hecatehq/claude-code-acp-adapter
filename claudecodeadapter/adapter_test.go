@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hecatehq/acp-adapter-kit/acp"
 	"github.com/hecatehq/acp-adapter-kit/acptest"
 	"github.com/hecatehq/acp-adapter-kit/adaptertest"
 	"github.com/hecatehq/acp-adapter-kit/commandbridge"
@@ -43,7 +44,7 @@ func TestInfoPinsClaudeCapabilities(t *testing.T) {
 		!info.Capabilities.AdditionalDirectories {
 		t.Fatalf("capabilities = %#v, want Claude Code stable ACP surface", info.Capabilities)
 	}
-	if claudecodeadapter.NewServer("1.2.3") == nil {
+	if newTestServer("1.2.3") == nil {
 		t.Fatal("NewServer returned nil")
 	}
 	if len(claudecodeadapter.Options()) == 0 {
@@ -52,7 +53,7 @@ func TestInfoPinsClaudeCapabilities(t *testing.T) {
 }
 
 func TestInitializeAdvertisesLoadSession(t *testing.T) {
-	adaptertest.AssertInitializeContract(t, claudecodeadapter.NewServer("test"), adaptertest.InitializeContract{
+	adaptertest.AssertInitializeContract(t, newTestServer("test"), adaptertest.InitializeContract{
 		Name:                  claudecodeadapter.Name,
 		Title:                 claudecodeadapter.Title,
 		Version:               "test",
@@ -72,29 +73,29 @@ func TestInitializeAdvertisesLoadSession(t *testing.T) {
 }
 
 func TestNewServerExposesHecateControls(t *testing.T) {
-	adaptertest.AssertSessionBootstrapContract(t, claudecodeadapter.NewServer("test"), adaptertest.SessionBootstrapContract{
+	adaptertest.AssertSessionBootstrapContract(t, newTestServer("test"), adaptertest.SessionBootstrapContract{
 		CWD: t.TempDir(),
 		ConfigOptions: []adaptertest.ConfigOptionContract{
 			{ID: "model", Category: "model", CurrentValue: "__default__"},
 			{ID: "effort", Category: "thought_level", CurrentValue: "__default__"},
 			{ID: "permission_mode", Category: "permission", CurrentValue: "dontAsk"},
 		},
-		AvailableCommands: []string{"init", "review", "code-review", "security-review", "compact", "debug", "run", "verify"},
+		AvailableCommands: nil,
 	})
 }
 
 func TestNewServerCreatesUUIDSessionID(t *testing.T) {
-	client := acptest.NewClient(t, claudecodeadapter.NewServer("test"))
+	client := acptest.NewClient(t, newTestServer("test"))
 	responses := client.Send(map[string]any{
 		"jsonrpc": "2.0",
 		"id":      1,
 		"method":  "session/new",
 		"params":  map[string]any{"cwd": t.TempDir()},
 	})
-	if len(responses) != 2 {
-		t.Fatalf("responses = %#v, want available command update + session response", responses)
+	if len(responses) != 1 {
+		t.Fatalf("responses = %#v, want session response", responses)
 	}
-	created := responses[1]
+	created := responses[0]
 
 	var session struct {
 		SessionID string `json:"sessionId"`
@@ -106,20 +107,20 @@ func TestNewServerCreatesUUIDSessionID(t *testing.T) {
 }
 
 func TestNewServerCloseSessionFreesCommandBridgeState(t *testing.T) {
-	client := acptest.NewClient(t, claudecodeadapter.NewServer("test"))
+	client := acptest.NewClient(t, newTestServer("test"))
 	responses := client.Send(map[string]any{
 		"jsonrpc": "2.0",
 		"id":      1,
 		"method":  "session/new",
 		"params":  map[string]any{"cwd": t.TempDir()},
 	})
-	if len(responses) != 2 {
-		t.Fatalf("responses = %#v, want available command update + session response", responses)
+	if len(responses) != 1 {
+		t.Fatalf("responses = %#v, want session response", responses)
 	}
 	var created struct {
 		SessionID string `json:"sessionId"`
 	}
-	responses[1].ResultInto(t, &created)
+	responses[0].ResultInto(t, &created)
 
 	closeResp := client.Request("session/close", map[string]any{"sessionId": created.SessionID})
 	var closeResult map[string]any
@@ -146,7 +147,7 @@ func TestNewServerCloseSessionFreesCommandBridgeState(t *testing.T) {
 }
 
 func TestNewServerLoadsKnownClaudeSessionIDAfterRestart(t *testing.T) {
-	client := acptest.NewClient(t, claudecodeadapter.NewServer("test"))
+	client := acptest.NewClient(t, newTestServer("test"))
 
 	responses := client.Send(map[string]any{
 		"jsonrpc": "2.0",
@@ -157,10 +158,10 @@ func TestNewServerLoadsKnownClaudeSessionIDAfterRestart(t *testing.T) {
 			"cwd":       t.TempDir(),
 		},
 	})
-	if len(responses) != 2 {
-		t.Fatalf("responses = %#v, want available command update + load response", responses)
+	if len(responses) != 1 {
+		t.Fatalf("responses = %#v, want load response", responses)
 	}
-	loaded := responses[1]
+	loaded := responses[0]
 	var loadResult struct {
 		ConfigOptions []struct {
 			ID           string `json:"id"`
@@ -201,7 +202,7 @@ case "$*" in
     ;;
 esac
 `)
-	client := acptest.NewClient(t, claudecodeadapter.NewServer("test"))
+	client := acptest.NewClient(t, newTestServer("test"))
 	client.Request("initialize", map[string]any{})
 	client.Send(map[string]any{
 		"jsonrpc": "2.0",
@@ -268,9 +269,10 @@ func assertMissingClaudeSessionLifecycle(t testing.TB, responses []acptest.Respo
 }
 
 func TestNewServerMatchesPortableUpstreamParity(t *testing.T) {
-	adaptertest.AssertUpstreamParityContract(t, claudecodeadapter.NewServer("test"), adaptertest.UpstreamParityContract{
-		CWD:          t.TempDir(),
-		AuthMethodID: "agent-login",
+	adaptertest.AssertUpstreamParityContract(t, newTestServer("test"), adaptertest.UpstreamParityContract{
+		CWD:                          t.TempDir(),
+		AuthMethodID:                 "agent-login",
+		AllowDynamicCommandDiscovery: true,
 		ConfigChange: adaptertest.ConfigChangeContract{
 			ID:    "model",
 			Value: "sonnet",
@@ -283,31 +285,19 @@ func TestNewServerMatchesPortableUpstreamParity(t *testing.T) {
 	})
 }
 
-func TestNewServerPublishesAvailableCommands(t *testing.T) {
-	client := acptest.NewClient(t, claudecodeadapter.NewServer("test"))
-	client.Request("initialize", map[string]any{})
-	responses := client.Send(map[string]any{
-		"jsonrpc": "2.0",
-		"id":      2,
-		"method":  "session/new",
-		"params":  map[string]any{"cwd": t.TempDir()},
-	})
-	if len(responses) != 2 {
-		t.Fatalf("responses = %#v, want available command update + session response", responses)
+func TestCommandSpecUsesLiveCommandDiscovery(t *testing.T) {
+	spec := claudecodeadapter.CommandSpec()
+	if spec.DiscoverCommands == nil {
+		t.Fatal("DiscoverCommands is nil")
 	}
-	update := decodeSessionUpdate(t, responses[0])
-	if update.Update.SessionUpdate != "available_commands_update" ||
-		len(update.Update.AvailableCommands) != 8 ||
-		update.Update.AvailableCommands[0].Name != "init" ||
-		update.Update.AvailableCommands[0].Input.Unstructured.Hint != "optional instruction focus" ||
-		update.Update.AvailableCommands[1].Name != "review" ||
-		update.Update.AvailableCommands[2].Name != "code-review" ||
-		update.Update.AvailableCommands[3].Name != "security-review" ||
-		update.Update.AvailableCommands[4].Name != "compact" ||
-		update.Update.AvailableCommands[5].Name != "debug" ||
-		update.Update.AvailableCommands[6].Name != "run" ||
-		update.Update.AvailableCommands[7].Name != "verify" {
-		t.Fatalf("available commands = %#v, want Claude command set", update)
+	if spec.Commands != nil {
+		t.Fatalf("Commands = %#v, want no hard-coded bootstrap catalog", spec.Commands)
+	}
+	if spec.CommandDiscoveryTimeout != 3*time.Second {
+		t.Fatalf("CommandDiscoveryTimeout = %s, want bounded 3s probe", spec.CommandDiscoveryTimeout)
+	}
+	if commands := claudecodeadapter.AvailableCommands(); commands != nil {
+		t.Fatalf("deprecated AvailableCommands = %#v, want no non-authoritative bootstrap catalog", commands)
 	}
 }
 
@@ -326,22 +316,13 @@ func TestNewCLISpecExposesLibraryContract(t *testing.T) {
 		!spec.Command.LoadUnknownSessions ||
 		len(spec.Command.AuthMethods) != 1 ||
 		len(spec.Command.Options) != 3 ||
-		len(spec.Command.Commands) != 8 ||
+		spec.Command.DiscoverCommands == nil ||
+		spec.Command.Commands != nil ||
 		!spec.Command.IncludeTranscript {
-		t.Fatalf("command spec = %#v, want command-backed bridge with config options and commands", spec.Command)
+		t.Fatalf("command spec = %#v, want command-backed bridge with live command discovery", spec.Command)
 	}
 	if spec.Command.AuthMethods[0].ID != "agent-login" || spec.Command.AuthMethods[0].Name != "Claude Code login" {
 		t.Fatalf("auth methods = %#v, want Claude Code login", spec.Command.AuthMethods)
-	}
-	if spec.Command.Commands[0].Name != "init" || spec.Command.Commands[0].InputHint == "" ||
-		spec.Command.Commands[1].Name != "review" ||
-		spec.Command.Commands[2].Name != "code-review" ||
-		spec.Command.Commands[3].Name != "security-review" ||
-		spec.Command.Commands[4].Name != "compact" ||
-		spec.Command.Commands[5].Name != "debug" ||
-		spec.Command.Commands[6].Name != "run" ||
-		spec.Command.Commands[7].Name != "verify" {
-		t.Fatalf("commands = %#v, want Claude command set with input hints", spec.Command.Commands)
 	}
 	if id := spec.Command.NewID(); !uuidPattern.MatchString(id) {
 		t.Fatalf("generated session id = %q, want UUID", id)
@@ -722,7 +703,7 @@ if [ "$1" != "auth" ] || [ "$2" != "logout" ]; then
 fi
 printf 'logged out\n'
 `)
-	client := acptest.NewClient(t, claudecodeadapter.NewServer("test"))
+	client := acptest.NewClient(t, newTestServer("test"))
 
 	resp := client.Request("logout", map[string]any{})
 	var result map[string]any
@@ -740,7 +721,7 @@ if [ "$1" != "/login" ]; then
 fi
 printf 'logged in\n'
 `)
-	client := acptest.NewClient(t, claudecodeadapter.NewServer("test"))
+	client := acptest.NewClient(t, newTestServer("test"))
 
 	resp := client.Request("authenticate", map[string]any{"methodId": "agent-login"})
 	var result map[string]any
@@ -775,7 +756,7 @@ fi
 echo "Authentication required. Please run claude /login." >&2
 exit 1
 `)
-	client := acptest.NewClient(t, claudecodeadapter.NewServer("test"))
+	client := acptest.NewClient(t, newTestServer("test"))
 	client.Request("initialize", map[string]any{})
 	createdResponses := client.Send(map[string]any{
 		"jsonrpc": "2.0",
@@ -783,13 +764,13 @@ exit 1
 		"method":  "session/new",
 		"params":  map[string]any{"cwd": t.TempDir()},
 	})
-	if len(createdResponses) != 2 {
-		t.Fatalf("create responses = %#v, want available commands + session response", createdResponses)
+	if len(createdResponses) != 1 {
+		t.Fatalf("create responses = %#v, want session response", createdResponses)
 	}
 	var session struct {
 		SessionID string `json:"sessionId"`
 	}
-	createdResponses[1].ResultInto(t, &session)
+	createdResponses[0].ResultInto(t, &session)
 
 	responses := client.Send(map[string]any{
 		"jsonrpc": "2.0",
@@ -824,7 +805,7 @@ printf '{"type":"assistant","message":{"content":[{"type":"thinking","id":"thoug
 printf '{"type":"result","usage":{"input_tokens":10,"output_tokens":5,"context_window":100}}\n'
 printf '{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"tool-1","content":"ok"}]}}\n'
 `)
-	client := acptest.NewClient(t, claudecodeadapter.NewServer("test"))
+	client := acptest.NewClient(t, newTestServer("test"))
 	client.Request("initialize", map[string]any{})
 	createdResponses := client.Send(map[string]any{
 		"jsonrpc": "2.0",
@@ -832,10 +813,10 @@ printf '{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id"
 		"method":  "session/new",
 		"params":  map[string]any{"cwd": t.TempDir()},
 	})
-	if len(createdResponses) != 2 {
-		t.Fatalf("create responses = %#v, want available command update + session response", createdResponses)
+	if len(createdResponses) != 1 {
+		t.Fatalf("create responses = %#v, want session response", createdResponses)
 	}
-	created := createdResponses[1]
+	created := createdResponses[0]
 	var session struct {
 		SessionID string `json:"sessionId"`
 	}
@@ -923,7 +904,7 @@ if [ "$1" != "--print" ]; then
 fi
 printf '{"type":"assistant","message":{"content":[{"type":"text","text":"ok"}]}}\n'
 `)
-	client := acptest.NewClient(t, claudecodeadapter.NewServer("test"))
+	client := acptest.NewClient(t, newTestServer("test"))
 	client.Request("initialize", map[string]any{})
 	createdResponses := client.Send(map[string]any{
 		"jsonrpc": "2.0",
@@ -934,7 +915,10 @@ printf '{"type":"assistant","message":{"content":[{"type":"text","text":"ok"}]}}
 	var session struct {
 		SessionID string `json:"sessionId"`
 	}
-	createdResponses[1].ResultInto(t, &session)
+	if len(createdResponses) != 1 {
+		t.Fatalf("create responses = %#v, want session response", createdResponses)
+	}
+	createdResponses[0].ResultInto(t, &session)
 
 	client.Send(promptRequest(3, session.SessionID, "first"))
 	client.Send(promptRequest(4, session.SessionID, "second"))
@@ -964,7 +948,7 @@ fi
 printf '{"type":"permission_request","toolUse":{"toolUseId":"tool-1","name":"Bash","input":{"command":"go test ./..."}},"options":[{"optionId":"allow","name":"Allow","kind":"allow_once"},{"optionId":"reject","name":"Reject","kind":"reject_once"}]}\n'
 printf '{"type":"assistant","message":{"content":[{"type":"text","text":"allowed"}]}}\n'
 `)
-	client := acptest.NewLiveClient(t, claudecodeadapter.NewServer("test"), acptest.WithAutoAllowPermissions())
+	client := acptest.NewLiveClient(t, newTestServer("test"), acptest.WithAutoAllowPermissions())
 	client.Request("initialize", "initialize", map[string]any{}, time.Second)
 	createdResponses := client.Request("new-session", "session/new", map[string]any{"cwd": t.TempDir()}, time.Second)
 	var session struct {
@@ -1034,7 +1018,7 @@ fi
 printf '{"type":"permission_request","toolUse":{"toolUseId":"tool-1","name":"Bash","input":{"command":"go test ./..."}},"options":[{"optionId":"allow","name":"Allow","kind":"allow_once"},{"optionId":"reject","name":"Reject","kind":"reject_once"}]}\n'
 printf '{"type":"assistant","message":{"content":[{"type":"text","text":"should not continue"}]}}\n'
 `)
-			client := acptest.NewLiveClient(t, claudecodeadapter.NewServer("test"), tt.option)
+			client := acptest.NewLiveClient(t, newTestServer("test"), tt.option)
 			client.Request("initialize", "initialize", map[string]any{}, time.Second)
 			createdResponses := client.Request("new-session", "session/new", map[string]any{"cwd": t.TempDir()}, time.Second)
 			var session struct {
@@ -1571,6 +1555,23 @@ func installFakeCommand(t testing.TB, name string, body string) {
 		t.Fatalf("write fake %s command: %v", name, err)
 	}
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
+// newTestServer deliberately supplies a runner without CommandStarter. Most
+// bridge tests verify unrelated ACP behavior against a deterministic fake
+// Claude executable; command discovery itself has focused process tests.
+func newTestServer(version string) *acp.Server {
+	return claudecodeadapter.NewServerWithRunner(version, testProcessRunner{})
+}
+
+type testProcessRunner struct{}
+
+func (testProcessRunner) Run(ctx context.Context, spec adapterprocess.Spec) (adapterprocess.Result, error) {
+	return adapterprocess.Run(ctx, spec)
+}
+
+func (testProcessRunner) RunStream(ctx context.Context, spec adapterprocess.Spec, onStdout func([]byte) error) (adapterprocess.Result, error) {
+	return adapterprocess.RunStream(ctx, spec, onStdout)
 }
 
 func assertNoPackageRunnerCommand(t testing.TB, command string) {
