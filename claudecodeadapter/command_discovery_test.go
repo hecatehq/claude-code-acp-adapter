@@ -198,6 +198,31 @@ func TestClaudeAvailableCommandsToACPPrioritizesCanonicalsAndBoundsProviderField
 	}
 }
 
+func TestClaudeAvailableCommandWireSizeMatchesACPCommandShape(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		command commandbridge.AvailableCommand
+		wire    string
+	}{
+		{
+			name:    "hint and empty description",
+			command: commandbridge.AvailableCommand{Name: " goal ", InputHint: " outcome "},
+			wire:    `{"name":"goal","description":"","input":{"hint":"outcome"}}`,
+		},
+		{
+			name:    "description without hint",
+			command: commandbridge.AvailableCommand{Name: "plan", Description: " Create a plan "},
+			wire:    `{"name":"plan","description":"Create a plan"}`,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got, want := claudeAvailableCommandWireSize(test.command), len(test.wire)+1; got != want {
+				t.Fatalf("wire size = %d, want %d for %s", got, want, test.wire)
+			}
+		})
+	}
+}
+
 func TestClaudeCommandDiscoveryCountingReaderBoundsWholeStream(t *testing.T) {
 	limited := &claudeCommandDiscoveryCountingReader{
 		Reader: io.LimitReader(strings.NewReader(strings.Repeat("x", claudeCommandDiscoveryMaxTotalBytes*2)), claudeCommandDiscoveryMaxTotalBytes),
@@ -214,9 +239,9 @@ func TestNewServerPublishesDiscoveredCommands(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("shell-script fake command is Unix-only")
 	}
-	installDiscoveryFakeClaude(t, "#!/bin/sh\nset -eu\ncat >/dev/null\nprintf '%s\\n' '{\"type\":\"control_response\",\"response\":{\"request_id\":\"hecate-command-discovery\",\"subtype\":\"success\",\"response\":{\"commands\":[{\"name\":\"goal\",\"description\":\"Set a goal.\"},{\"name\":\"loop\",\"aliases\":[\"proactive\"]}]}}}'\n")
+	installDiscoveryFakeClaude(t, "#!/bin/sh\nset -eu\ncat >/dev/null\nprintf '%s\\n' '{\"type\":\"control_response\",\"response\":{\"request_id\":\"hecate-command-discovery\",\"subtype\":\"success\",\"response\":{\"commands\":[{\"name\":\"goal\",\"description\":\"Set a goal.\",\"argumentHint\":\"outcome\"},{\"name\":\"loop\",\"aliases\":[\"proactive\"]}]}}}'\n")
 
-	updates := make(chan []string, 1)
+	updates := make(chan json.RawMessage, 1)
 	client := acptest.NewLiveClient(t, NewServerWithRunner("test", discoveryTestRunner{}), acptest.WithLiveResponseHandler(func(_ *acptest.LiveClient, response acptest.Response) {
 		if response.Method != "session/update" {
 			return
@@ -227,15 +252,10 @@ func TestNewServerPublishesDiscoveredCommands(t *testing.T) {
 		if update["sessionUpdate"] != "available_commands_update" {
 			return
 		}
-		rawCommands, _ := update["availableCommands"].([]any)
-		names := make([]string, 0, len(rawCommands))
-		for _, raw := range rawCommands {
-			command, _ := raw.(map[string]any)
-			if name, _ := command["name"].(string); name != "" {
-				names = append(names, name)
-			}
+		select {
+		case updates <- append(json.RawMessage(nil), response.Params...):
+		default:
 		}
-		updates <- names
 	}))
 
 	responses := client.Request("new", "session/new", map[string]any{"cwd": t.TempDir()}, time.Second)
@@ -251,9 +271,31 @@ func TestNewServerPublishesDiscoveredCommands(t *testing.T) {
 	if sessionID == "" {
 		t.Fatalf("session/new responses = %#v, want session result", responses)
 	}
-	got := waitForDiscoveredCommandNames(t, client, updates)
+	raw := waitForDiscoveredCommandUpdate(t, client, updates)
+	var catalog struct {
+		Update struct {
+			AvailableCommands []map[string]json.RawMessage `json:"availableCommands"`
+		} `json:"update"`
+	}
+	if err := json.Unmarshal(raw, &catalog); err != nil {
+		t.Fatalf("decode discovered command notification: %v", err)
+	}
+	got := make([]string, 0, len(catalog.Update.AvailableCommands))
+	for _, command := range catalog.Update.AvailableCommands {
+		var name string
+		if err := json.Unmarshal(command["name"], &name); err != nil {
+			t.Fatalf("decode discovered command name: %v", err)
+		}
+		got = append(got, name)
+	}
 	if want := []string{"goal", "loop", "proactive"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("discovered command names = %#v, want %#v", got, want)
+	}
+	if got := string(catalog.Update.AvailableCommands[0]["input"]); got != `{"hint":"outcome"}` {
+		t.Fatalf("discovered command input wire = %s, want flat hint", got)
+	}
+	if got := string(catalog.Update.AvailableCommands[1]["description"]); got != `""` {
+		t.Fatalf("empty discovered command description wire = %s, want required empty string", got)
 	}
 }
 
@@ -306,7 +348,7 @@ func shellQuote(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
 }
 
-func waitForDiscoveredCommandNames(t testing.TB, client *acptest.LiveClient, updates <-chan []string) []string {
+func waitForDiscoveredCommandUpdate(t testing.TB, client *acptest.LiveClient, updates <-chan json.RawMessage) json.RawMessage {
 	t.Helper()
 	deadline := time.Now().Add(time.Second)
 	for {

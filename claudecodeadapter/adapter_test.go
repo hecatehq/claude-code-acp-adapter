@@ -266,6 +266,8 @@ func assertMissingClaudeSessionLifecycle(t testing.TB, responses []acptest.Respo
 				t.Fatalf("missing-session responses contain multiple prompt errors: %#v", responses)
 			}
 			promptErr = response.Error
+		default:
+			t.Fatalf("missing-session response = %#v, want wrapper lifecycle update or prompt error", response)
 		}
 	}
 	if start == nil || finish == nil || promptErr == nil {
@@ -1505,9 +1507,7 @@ type sessionUpdate struct {
 			Name        string `json:"name"`
 			Description string `json:"description"`
 			Input       struct {
-				Unstructured struct {
-					Hint string `json:"hint"`
-				} `json:"unstructured"`
+				Hint string `json:"hint"`
 			} `json:"input"`
 		} `json:"availableCommands"`
 	} `json:"update"`
