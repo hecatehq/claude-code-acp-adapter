@@ -22,6 +22,35 @@ func TestReleaseWorkflowGeneratesProvenanceAttestations(t *testing.T) {
 	}
 }
 
+func TestReleaseWorkflowVerifiesTagAndCleanModuleInputs(t *testing.T) {
+	workflow := readRepoText(t, ".github/workflows/release.yml")
+	for _, want := range []string{
+		"Verify release tag",
+		`git merge-base --is-ancestor "$release_commit" FETCH_HEAD`,
+		`run: make release-check VERSION="${RELEASE_TAG#v}"`,
+	} {
+		if !strings.Contains(workflow, want) {
+			t.Fatalf("release workflow missing %q", want)
+		}
+	}
+
+	makefile := readRepoText(t, "Makefile")
+	for _, want := range []string{
+		"tidy-check:",
+		"$(GO) mod tidy -diff",
+		"release-check: test test-race vet tidy-check version-smoke",
+	} {
+		if !strings.Contains(makefile, want) {
+			t.Fatalf("makefile missing %q", want)
+		}
+	}
+
+	goreleaser := readRepoText(t, ".goreleaser.yaml")
+	if !strings.Contains(goreleaser, "- go mod tidy -diff") {
+		t.Fatalf("goreleaser config must reject untidy module metadata")
+	}
+}
+
 func TestReleaseDocsDescribeStableReadinessGate(t *testing.T) {
 	release := readRepoText(t, "docs/RELEASE.md")
 	for _, want := range []string{
@@ -45,6 +74,8 @@ func TestReleaseDocsDescribeStableReadinessGate(t *testing.T) {
 		"Parity Matrix",
 		"Release artifacts",
 		"gh attestation verify",
+		"GitHub rules require pull-request review",
+		"restrict `v*` tag creation, updates, and deletion",
 	} {
 		if !strings.Contains(stable, want) {
 			t.Fatalf("stable readiness docs missing %q", want)

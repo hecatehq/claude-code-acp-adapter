@@ -14,6 +14,9 @@ Before tagging:
 - `make real-cli-smoke` passes on a prepared machine with an authenticated
   Claude Code CLI.
 - Required GitHub checks pass on the exact commit that will be tagged.
+- GitHub rules require pull-request review and the repository test check on the
+  default branch, and restrict `v*` tag creation, updates, and deletion to
+  release maintainers.
 - Every `Required` row in the parity matrix is covered. `Future` rows are
   non-blocking.
 

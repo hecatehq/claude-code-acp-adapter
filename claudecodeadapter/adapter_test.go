@@ -229,29 +229,63 @@ esac
 
 func assertMissingClaudeSessionLifecycle(t testing.TB, responses []acptest.Response, sessionID string) {
 	t.Helper()
-	if len(responses) != 3 {
-		t.Fatalf("missing-session responses = %#v, want wrapper start, wrapper failure, and prompt error only", responses)
+	var start *sessionUpdate
+	var finish *sessionUpdate
+	var promptErr *acp.RPCError
+	for _, response := range responses {
+		switch {
+		case response.Method == "session/update":
+			update := decodeSessionUpdate(t, response)
+			if update.SessionID != sessionID {
+				// Command discovery is asynchronous and another active session may
+				// publish its provider-owned catalog while this prompt is running.
+				continue
+			}
+			switch update.Update.SessionUpdate {
+			case "available_commands_update":
+				// A catalog is a side-channel notification, not part of the
+				// missing-native prompt lifecycle.
+				continue
+			case "tool_call":
+				if start != nil {
+					t.Fatalf("missing-session responses contain multiple wrapper starts: %#v", responses)
+				}
+				copy := update
+				start = &copy
+			case "tool_call_update":
+				if finish != nil {
+					t.Fatalf("missing-session responses contain multiple wrapper finishes: %#v", responses)
+				}
+				copy := update
+				finish = &copy
+			default:
+				t.Fatalf("missing-session update = %#v, want wrapper lifecycle or command catalog", update)
+			}
+		case response.Error != nil:
+			if promptErr != nil {
+				t.Fatalf("missing-session responses contain multiple prompt errors: %#v", responses)
+			}
+			promptErr = response.Error
+		}
 	}
-	start := decodeSessionUpdate(t, responses[0])
+	if start == nil || finish == nil || promptErr == nil {
+		t.Fatalf("missing-session responses = %#v, want wrapper start, wrapper failure, and prompt error", responses)
+	}
 	if start.SessionID != sessionID ||
-		start.Update.SessionUpdate != "tool_call" ||
 		!strings.HasPrefix(start.Update.ToolCallID, "prompt-command-") ||
 		start.Update.Title != "Run claude" ||
 		start.Update.Kind != "execute" ||
 		start.Update.Status != "in_progress" {
 		t.Fatalf("missing-session wrapper start = %#v, want exact command start", start)
 	}
-	finish := decodeSessionUpdate(t, responses[1])
 	if finish.SessionID != sessionID ||
-		finish.Update.SessionUpdate != "tool_call_update" ||
 		finish.Update.ToolCallID != start.Update.ToolCallID ||
 		finish.Update.Title != "Run claude" ||
 		finish.Update.Kind != "execute" ||
 		finish.Update.Status != "failed" {
 		t.Fatalf("missing-session wrapper finish = %#v, want matching failed command", finish)
 	}
-	promptErr := responses[2].Error
-	if promptErr == nil || promptErr.Code != -32000 || promptErr.Message != "prompt command failed" {
+	if promptErr.Code != -32000 || promptErr.Message != "prompt command failed" {
 		t.Fatalf("missing-session prompt error = %#v, want -32000 prompt command failed", promptErr)
 	}
 	errorData, err := json.Marshal(promptErr.Data)
