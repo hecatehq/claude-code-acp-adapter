@@ -4,6 +4,7 @@ package claudecodeadapter_test
 
 import (
 	"crypto/rand"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -26,10 +27,20 @@ func TestRealClaudeCodeCLISmoke(t *testing.T) {
 		t.Fatalf("claude CLI not found in PATH: %v", err)
 	}
 
-	client := acptest.NewLiveClient(t, claudecodeadapter.NewServer("real-cli-smoke"), acptest.WithAutoAllowPermissions())
+	commandCatalogs := make(chan realCLICommandCatalog, 16)
+	client := acptest.NewLiveClient(t, claudecodeadapter.NewServer("real-cli-smoke"), acptest.WithLiveResponseHandler(func(client *acptest.LiveClient, response acptest.Response) {
+		client.AutoAllowPermission(response)
+		if catalog, ok := realCLICommandCatalogFromResponse(response); ok {
+			select {
+			case commandCatalogs <- catalog:
+			default:
+			}
+		}
+	}))
 	client.Request("initialize", "initialize", map[string]any{}, 4*time.Minute)
 
 	session := newRealCLISession(t, client, t.TempDir())
+	assertRealCLICommandCatalog(t, client, commandCatalogs, session.SessionID)
 	assertRealCLISessionLifecycle(t, client, session.SessionID, session.CWD)
 
 	responses := client.PromptText("prompt-basic", session.SessionID, "Reply briefly with one sentence confirming the Claude Code ACP adapter real CLI smoke. Do not inspect files or run commands.", 4*time.Minute)
@@ -128,6 +139,53 @@ func assertRealCLIPromptCompleted(t testing.TB, responses []acptest.Response, pr
 type realCLISession struct {
 	SessionID string
 	CWD       string
+}
+
+type realCLICommandCatalog struct {
+	SessionID string
+}
+
+func realCLICommandCatalogFromResponse(response acptest.Response) (realCLICommandCatalog, bool) {
+	if response.Method != "session/update" {
+		return realCLICommandCatalog{}, false
+	}
+	var payload struct {
+		SessionID string `json:"sessionId"`
+		Update    struct {
+			SessionUpdate     string            `json:"sessionUpdate"`
+			AvailableCommands []json.RawMessage `json:"availableCommands"`
+		} `json:"update"`
+	}
+	if err := json.Unmarshal(response.Params, &payload); err != nil || payload.Update.SessionUpdate != "available_commands_update" || payload.Update.AvailableCommands == nil {
+		return realCLICommandCatalog{}, false
+	}
+	return realCLICommandCatalog{SessionID: payload.SessionID}, true
+}
+
+func assertRealCLICommandCatalog(t testing.TB, client *acptest.LiveClient, catalogs <-chan realCLICommandCatalog, sessionID string) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		select {
+		case catalog := <-catalogs:
+			if catalog.SessionID != sessionID {
+				continue
+			}
+			// ACP treats an explicit empty catalog as a valid replacement
+			// snapshot. This live gate verifies delivery; the fake-CLI suite
+			// separately covers names and aliases.
+			return
+		default:
+		}
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			t.Fatalf("timed out waiting for real CLI command catalog for %q", sessionID)
+		}
+		if remaining > 50*time.Millisecond {
+			remaining = 50 * time.Millisecond
+		}
+		client.AssertNoLateResponse("real-cli-command-catalog", remaining)
+	}
 }
 
 func newRealCLISession(t testing.TB, client *acptest.LiveClient, cwd string) realCLISession {

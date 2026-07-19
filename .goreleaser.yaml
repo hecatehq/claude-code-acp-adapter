@@ -4,7 +4,7 @@ project_name: claude-code-acp-adapter
 
 before:
   hooks:
-    - go mod tidy
+    - go mod tidy -diff
     - go test ./...
 
 builds:
@@ -45,9 +45,7 @@ changelog:
   sort: asc
   filters:
     exclude:
-      - "^docs:"
-      - "^test:"
-      - "^chore:"
+      - '^(docs|test|chore)(\([^)]*\))?:'
 
 release:
   prerelease: auto
