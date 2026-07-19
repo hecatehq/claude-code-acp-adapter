@@ -278,12 +278,12 @@ func appendClaudeAvailableCommand(out []commandbridge.AvailableCommand, catalogB
 }
 
 func claudeAvailableCommandWireSize(command commandbridge.AvailableCommand) int {
-	item := map[string]any{"name": command.Name}
-	if command.Description != "" {
-		item["description"] = command.Description
+	item := map[string]any{
+		"name":        strings.TrimSpace(command.Name),
+		"description": strings.TrimSpace(command.Description),
 	}
-	if command.InputHint != "" {
-		item["input"] = map[string]any{"unstructured": map[string]string{"hint": command.InputHint}}
+	if hint := strings.TrimSpace(command.InputHint); hint != "" {
+		item["input"] = map[string]string{"hint": hint}
 	}
 	raw, err := json.Marshal(item)
 	if err != nil {

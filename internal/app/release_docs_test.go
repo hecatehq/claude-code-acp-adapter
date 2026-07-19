@@ -58,6 +58,9 @@ func TestReleaseDocsDescribeStableReadinessGate(t *testing.T) {
 		"gh attestation verify",
 		"checksums.txt",
 		"STABLE_READINESS.md",
+		"git tag v0.3.1",
+		"git push origin v0.3.1",
+		"tag=v0.3.1",
 	} {
 		if !strings.Contains(release, want) {
 			t.Fatalf("release docs missing %q", want)

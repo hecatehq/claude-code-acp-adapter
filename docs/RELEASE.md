@@ -21,8 +21,8 @@ make snapshot
 Use semantic version tags. Add a prerelease suffix only for prerelease builds:
 
 ```sh
-git tag v0.3.0
-git push origin v0.3.0
+git tag v0.3.1
+git push origin v0.3.1
 ```
 
 Pushing a `v*` tag runs `.github/workflows/release.yml`, which uses GoReleaser
@@ -47,7 +47,7 @@ generates GitHub artifact attestations from that checksum file using
 Download the archive and checksum file for the tag:
 
 ```sh
-tag=v0.3.0
+tag=v0.3.1
 version="${tag#v}"
 archive="claude-code-acp-adapter_${version}_linux_amd64.tar.gz"
 
