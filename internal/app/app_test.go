@@ -5,12 +5,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hecatehq/acp-adapter-kit/adaptercli"
 	"github.com/hecatehq/acp-adapter-kit/commandbridge"
@@ -116,6 +118,7 @@ func TestRuntimeFlagsStartProcessBackedACPBridge(t *testing.T) {
 		`{"jsonrpc":"2.0","id":4,"method":"session/list","params":{"cwd":"` + workdir + `"}}`,
 		`{"jsonrpc":"2.0","id":5,"method":"session/delete","params":{"sessionId":"app-session"}}`,
 	}, "\n") + "\n")
+	transcript := newAppTranscript(t, input, &stdout, "5")
 
 	code := Run([]string{
 		"--runtime-binary", os.Args[0],
@@ -123,7 +126,7 @@ func TestRuntimeFlagsStartProcessBackedACPBridge(t *testing.T) {
 		"--runtime-arg=-test.run=TestAppRuntimeHelper",
 		"--runtime-arg=--",
 		"--runtime-arg=app-runtime-helper",
-	}, input, &stdout, &stderr)
+	}, transcript, transcript, &stderr)
 	if code != 0 {
 		t.Fatalf("Run returned %d, want 0; stderr=%q", code, stderr.String())
 	}
@@ -188,6 +191,7 @@ func TestRuntimeFlagsForwardInitializeClientCapabilities(t *testing.T) {
 		`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientCapabilities":{"auth":{"terminal":true},"terminal":true}}}`,
 		`{"jsonrpc":"2.0","id":2,"method":"session/new","params":{"cwd":"` + workdir + `"}}`,
 	}, "\n") + "\n")
+	transcript := newAppTranscript(t, input, &stdout, "2")
 
 	code := Run([]string{
 		"--runtime-binary", os.Args[0],
@@ -197,7 +201,7 @@ func TestRuntimeFlagsForwardInitializeClientCapabilities(t *testing.T) {
 		"--runtime-arg=app-runtime-helper",
 		"--runtime-arg=require-terminal-capability",
 		"--runtime-arg=require-auth-terminal-capability",
-	}, input, &stdout, &stderr)
+	}, transcript, transcript, &stderr)
 	if code != 0 {
 		t.Fatalf("Run returned %d, want 0; stderr=%q stdout=%q", code, stderr.String(), stdout.String())
 	}
@@ -275,7 +279,8 @@ func TestCommandBridgeRunsClaudePrintWithConfigOptions(t *testing.T) {
 		`{"jsonrpc":"2.0","id":4,"method":"session/set_config_option","params":{"sessionId":"` + testClaudeSessionID + `","configId":"permission_mode","value":"plan"}}`,
 		`{"jsonrpc":"2.0","id":5,"method":"session/prompt","params":{"sessionId":"` + testClaudeSessionID + `","prompt":[{"type":"text","text":"hello claude"}]}}`,
 	}, "\n") + "\n")
-	spec := adapterSpec(input, &stdout, &stderr)
+	transcript := newAppTranscript(t, input, &stdout, "5")
+	spec := adapterSpec(transcript, transcript, &stderr)
 	spec.Command.NewID = func() string { return testClaudeSessionID }
 	spec.Command.Runner = commandbridge.RunnerFunc(func(_ context.Context, got adapterprocess.Spec) (adapterprocess.Result, error) {
 		wantArgs := []string{
@@ -416,7 +421,8 @@ func TestCommandBridgeGrantsPrivateResourceStageBeforeDelimitedPrompt(t *testing
 	}
 
 	var stagedDir string
-	spec := adapterSpec(strings.NewReader(input.String()), &stdout, &stderr)
+	transcript := newAppTranscript(t, strings.NewReader(input.String()), &stdout, "2")
+	spec := adapterSpec(transcript, transcript, &stderr)
 	spec.Command.NewID = func() string { return testClaudeSessionID }
 	spec.Command.Runner = commandbridge.RunnerFunc(func(_ context.Context, got adapterprocess.Spec) (adapterprocess.Result, error) {
 		if got.Command != "claude" || got.Dir != workdir {
@@ -928,4 +934,45 @@ func envNamed(statuses []struct {
 		}
 	}
 	return false
+}
+
+// appTranscript keeps the client connected until its last request settles.
+type appTranscript struct {
+	input    *strings.Reader
+	output   *bytes.Buffer
+	lastID   string
+	done     chan struct{}
+	deadline context.Context
+}
+
+func newAppTranscript(t *testing.T, input *strings.Reader, output *bytes.Buffer, lastID string) *appTranscript {
+	t.Helper()
+	deadline, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	t.Cleanup(cancel)
+	return &appTranscript{input: input, output: output, lastID: lastID, done: make(chan struct{}, 1), deadline: deadline}
+}
+
+func (s *appTranscript) Read(p []byte) (int, error) {
+	n, err := s.input.Read(p)
+	if err != io.EOF {
+		return n, err
+	}
+	select {
+	case <-s.done:
+		return 0, io.EOF
+	case <-s.deadline.Done():
+		return 0, s.deadline.Err()
+	}
+}
+
+func (s *appTranscript) Write(p []byte) (int, error) {
+	n, err := s.output.Write(p)
+	var response struct {
+		ID     json.RawMessage `json:"id"`
+		Method string          `json:"method"`
+	}
+	if json.Unmarshal(p, &response) == nil && response.Method == "" && string(response.ID) == s.lastID {
+		s.done <- struct{}{}
+	}
+	return n, err
 }
